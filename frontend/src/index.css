@@ -122,3 +122,56 @@
 .syntax-string { color: #4edea3; }
 .syntax-function { color: #ffb95f; }
 .syntax-comment { color: #8c909f; font-style: italic; }
+
+/* Yjs Remote Cursors */
+.yRemoteSelection {
+  background-color: rgba(250, 129, 0, 0.4);
+}
+.yRemoteSelectionHead {
+  position: absolute;
+  border-left: 2px solid orange;
+  height: 100%;
+  box-sizing: border-box;
+  display: inline-block;
+  pointer-events: none;
+}
+.yRemoteSelectionHead::after {
+  position: absolute;
+  content: ' ';
+  border: 3px solid orange;
+  border-radius: 4px;
+  left: -4px;
+  top: -5px;
+  box-sizing: border-box;
+}
+.yRemoteSelectionHead::before {
+  content: attr(user-name);
+  position: absolute;
+  background-color: orange;
+  color: white;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  top: -15px;
+  left: -2px;
+  padding: 0 4px;
+  border-radius: 2px;
+  white-space: nowrap;
+  z-index: 100;
+  pointer-events: none;
+}
+
+.yRemoteSelectionHead-label {
+  position: absolute;
+  top: -1.5em;
+  left: 0;
+  background-color: var(--color-secondary);
+  color: var(--color-on-secondary);
+  font-size: 10px;
+  font-family: monospace;
+  padding: 2px 4px;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 10;
+  font-weight: bold;
+}

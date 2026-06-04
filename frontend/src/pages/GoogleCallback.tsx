@@ -2,17 +2,17 @@ import React, { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../utils/AuthContext';
 
-const GitHubCallback: React.FC = () => {
+const GoogleCallback: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { githubLogin } = useAuth();
+  const { googleLogin } = useAuth();
   const hasCalled = React.useRef(false);
 
   useEffect(() => {
     const code = searchParams.get('code');
     if (code && !hasCalled.current) {
       hasCalled.current = true;
-      githubLogin(code)
+      googleLogin(code)
         .then(() => {
           navigate('/dashboard');
         })
@@ -22,7 +22,7 @@ const GitHubCallback: React.FC = () => {
     } else if (!code) {
       navigate('/login');
     }
-  }, [searchParams, githubLogin, navigate]);
+  }, [searchParams, googleLogin, navigate]);
 
   return (
     <div className="h-screen w-screen flex flex-col items-center justify-center bg-background text-on-surface">
@@ -31,10 +31,10 @@ const GitHubCallback: React.FC = () => {
       </div>
       <div className="flex flex-col items-center gap-4">
         <span className="material-symbols-outlined animate-spin text-[48px] text-primary">sync</span>
-        <p className="font-mono text-[14px] uppercase tracking-widest">Authorizing with GitHub...</p>
+        <p className="font-mono text-[14px] uppercase tracking-widest">Authorizing with Google...</p>
       </div>
     </div>
   );
 };
 
-export default GitHubCallback;
+export default GoogleCallback;

@@ -12,8 +12,9 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
 
   if (loading) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-background text-primary">
-        <span className="material-symbols-outlined animate-spin text-[48px]">sync</span>
+      <div className="h-screen w-screen flex flex-col items-center justify-center bg-background text-primary font-mono">
+        <span className="material-symbols-outlined animate-spin text-[48px] mb-4">sync</span>
+        <p className="uppercase tracking-[0.2em] text-[12px]">Verifying credentials...</p>
       </div>
     );
   }

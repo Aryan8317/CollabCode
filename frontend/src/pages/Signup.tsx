@@ -20,17 +20,26 @@ const Signup: React.FC = () => {
   }, [isAuthenticated, navigate]);
 
   const handleGitHubLogin = () => {
-    const clientId = 'Ov23liE2whOEuvdBVnPB';
-    const redirectUri = 'http://localhost:5173/auth/github/callback';
+    const clientId = import.meta.env.VITE_GITHUB_CLIENT_ID;
+    const redirectUri = `${window.location.origin}/auth/github/callback`;
     window.location.href = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=user:email`;
+  };
+
+  const handleGoogleLogin = () => {
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    const redirectUri = `${window.location.origin}/auth/google/callback`;
+    const scope = 'https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email';
+    window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&access_type=offline&prompt=consent`;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     try {
-      await signup(name, email, password);
-      navigate('/dashboard');
+      const result = await signup(name, email, password);
+      if (result && result.email) {
+        navigate('/verify-email', { state: { email: result.email } });
+      }
     } catch (err) {
       // Error is handled by context and displayed below
     } finally {
@@ -95,11 +104,16 @@ const Signup: React.FC = () => {
             )}
 
             <div className="grid grid-cols-2 gap-4 mb-6">
-              <button className="flex items-center justify-center gap-2 py-3 px-4 rounded-lg bg-surface-container border border-outline-variant hover:bg-surface-container-high transition-all active:scale-[0.98]">
+              <button 
+                type="button"
+                onClick={handleGoogleLogin}
+                className="flex items-center justify-center gap-2 py-3 px-4 rounded-lg bg-surface-container border border-outline-variant hover:bg-surface-container-high transition-all active:scale-[0.98]"
+              >
                 <img alt="Google Logo" className="w-5 h-5" src="https://fonts.gstatic.com/s/i/productlogos/googleg/v6/24px.svg" />
                 <span className="font-mono text-[11px] font-bold text-on-surface tracking-wider uppercase">Google</span>
               </button>
               <button 
+                type="button"
                 className="flex items-center justify-center gap-2 py-3 px-4 rounded-lg bg-surface-container border border-outline-variant hover:bg-surface-container-high transition-all active:scale-[0.98]"
                 onClick={handleGitHubLogin}
               >

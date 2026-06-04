@@ -11,6 +11,7 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: [true, 'Please add an email'],
       unique: true,
+      index: true,
       match: [
         /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
         'Please add a valid email',
@@ -18,7 +19,7 @@ const userSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      required: function(this: any) { return !this.githubId; },
+      required: function(this: any) { return !this.githubId && !this.googleId; },
       minlength: 6,
       select: false,
     },
@@ -27,8 +28,75 @@ const userSchema = new mongoose.Schema(
       unique: true,
       sparse: true,
     },
+    googleId: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
     avatar: {
       type: String,
+    },
+    username: {
+      type: String,
+      unique: true,
+      sparse: true,
+      index: true,
+    },
+    title: {
+      type: String,
+    },
+    bio: {
+      type: String,
+    },
+    skills: [
+      {
+        type: String,
+      },
+    ],
+    socialLinks: {
+      github: String,
+      twitter: String,
+      linkedin: String,
+      website: String,
+    },
+    stats: {
+      contributions: { type: Number, default: 0, index: true },
+      roomsCreated: { type: Number, default: 0 },
+      collaborators: { type: Number, default: 0 },
+    },
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
+    otp: {
+      type: String,
+    },
+    otpExpires: {
+      type: Date,
+    },
+    emailOtpAttempts: {
+      type: Number,
+      default: 0,
+    },
+    resetPasswordToken: {
+      type: String,
+    },
+    resetPasswordExpires: {
+      type: Date,
+    },
+    passwordResetOtpAttempts: {
+      type: Number,
+      default: 0,
+    },
+    editorSettings: {
+      theme: { type: String, default: 'vs-dark' },
+      fontSize: { type: Number, default: 14 },
+      fontLigatures: { type: Boolean, default: false },
+      lineNumbers: { type: String, default: 'on' },
+      minimap: { type: Boolean, default: true },
+    },
+    notificationSettings: {
+      email: { type: Boolean, default: true },
     },
   },
   {

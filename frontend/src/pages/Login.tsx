@@ -19,9 +19,16 @@ const Login: React.FC = () => {
   }, [isAuthenticated, navigate]);
 
   const handleGitHubLogin = () => {
-    const clientId = 'Ov23liE2whOEuvdBVnPB';
-    const redirectUri = 'http://localhost:5173/auth/github/callback';
+    const clientId = import.meta.env.VITE_GITHUB_CLIENT_ID;
+    const redirectUri = `${window.location.origin}/auth/github/callback`;
     window.location.href = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=user:email`;
+  };
+
+  const handleGoogleLogin = () => {
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    const redirectUri = `${window.location.origin}/auth/google/callback`;
+    const scope = 'https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email';
+    window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&access_type=offline&prompt=consent`;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -30,8 +37,10 @@ const Login: React.FC = () => {
     try {
       await login(email, password);
       navigate('/dashboard');
-    } catch (err) {
-      // Error is handled by context and displayed below
+    } catch (err: any) {
+      if (err.response?.data?.unverified) {
+        navigate('/verify-email', { state: { email } });
+      }
     } finally {
       setIsLoading(false);
     }
@@ -95,7 +104,10 @@ const Login: React.FC = () => {
             )}
 
             <div className="grid grid-cols-2 gap-4 mb-8">
-              <button className="flex items-center justify-center gap-2 py-3 px-4 rounded-lg bg-surface-container border border-outline-variant hover:bg-surface-container-high transition-all active:scale-[0.98]">
+              <button 
+                className="flex items-center justify-center gap-2 py-3 px-4 rounded-lg bg-surface-container border border-outline-variant hover:bg-surface-container-high transition-all active:scale-[0.98]"
+                onClick={handleGoogleLogin}
+              >
                 <img alt="Google Logo" className="w-5 h-5" src="https://fonts.gstatic.com/s/i/productlogos/googleg/v6/24px.svg" />
                 <span className="font-mono text-[11px] font-bold text-on-surface tracking-wider uppercase">Google</span>
               </button>
@@ -125,7 +137,7 @@ const Login: React.FC = () => {
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <label className="font-mono text-[11px] font-bold text-on-surface-variant block tracking-wider uppercase" htmlFor="password">PASSWORD</label>
-                  <a className="font-mono text-[12px] text-primary hover:underline decoration-primary/30 underline-offset-4" href="#">FORGOT_SECRET?</a>
+                  <Link className="font-mono text-[12px] text-primary hover:underline decoration-primary/30 underline-offset-4" to="/forgot-password">FORGOT_SECRET?</Link>
                 </div>
                 <div className="relative group">
                   <input className="w-full bg-transparent border border-outline-variant rounded-lg py-3 px-4 text-on-surface font-geist text-[14px] focus:outline-none focus:ring-2 focus:ring-primary-container focus:border-primary-container transition-all placeholder:text-outline/50" id="password" placeholder="••••••••" required type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} />

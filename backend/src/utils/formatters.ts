@@ -1,0 +1,16 @@
+export const formatUser = (user: any) => ({
+  id: user._id,
+  name: user.name,
+  email: user.email,
+  avatar: user.avatar,
+  username: user.username,
+  title: user.title,
+  bio: user.bio,
+  skills: user.skills,
+  socialLinks: user.socialLinks,
+  stats: user.stats,
+  githubId: user.githubId,
+  googleId: user.googleId,
+  editorSettings: user.editorSettings,
+  notificationSettings: user.notificationSettings,
+});

@@ -1,201 +1,298 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../utils/AuthContext';
+import API from '../utils/api';
+import CreateRoomModal from '../components/CreateRoomModal';
+import Navbar from '../components/Navbar';
 
 const RoomDashboard: React.FC = () => {
   const navigate = useNavigate();
-  const { user, logout, isAuthenticated } = useAuth();
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
-  const [rooms] = useState([]); // Empty rooms state for now
+  const { user } = useAuth();
+  const [rooms, setRooms] = useState<any[]>([]);
+  const [invitations, setInvitations] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [inviteCode, setInviteCode] = useState('');
 
-  const handleJoinRoom = (roomId: string) => {
-    navigate(`/workspace/${roomId}`);
-  };
+  useEffect(() => {
+    fetchMyRooms();
+    fetchInvitations();
+  }, []);
 
-  const handleCreateRoom = () => {
-    // Generate a random room ID for demo
-    const roomId = Math.random().toString(36).substring(7);
-    navigate(`/workspace/${roomId}`);
-  };
-
-  const handleLogoClick = () => {
-    if (isAuthenticated) {
-      navigate('/dashboard');
-    } else {
-      navigate('/login');
+  const fetchMyRooms = async () => {
+    setLoading(true);
+    try {
+      const { data } = await API.get('/rooms');
+      setRooms(data.rooms || []);
+    } catch (err) {
+      console.error('Error fetching rooms:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
+  const fetchInvitations = async () => {
+    try {
+      const { data } = await API.get('/rooms/invitations/me');
+      setInvitations(data);
+    } catch (err) {
+      console.error('Error fetching invitations:', err);
+    }
+  };
+
+  const handleAcceptInvite = async (invitationId: string) => {
+    try {
+      await API.post(`/rooms/invitations/${invitationId}/accept`);
+      setInvitations(invitations.filter(inv => inv._id !== invitationId));
+      fetchMyRooms();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Error accepting invitation');
+    }
+  };
+
+  const handleDeclineInvite = async (invitationId: string) => {
+    try {
+      await API.post(`/rooms/invitations/${invitationId}/decline`);
+      setInvitations(invitations.filter(inv => inv._id !== invitationId));
+    } catch (err) {
+      console.error('Error declining invitation:', err);
+    }
+  };
+
+  const handleJoinRoom = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteCode) return;
+    try {
+      const { data } = await API.post('/rooms/join', { inviteCode });
+      navigate(`/workspace/${data.roomId}`);
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to join room');
+    }
+  };
+
+  const handleDeleteRoom = async (e: React.MouseEvent, roomId: string) => {
+    e.stopPropagation();
+    if (!window.confirm('Are you sure you want to delete this room? This action cannot be undone.')) return;
+    
+    try {
+      await API.delete(`/rooms/${roomId}`);
+      setRooms(rooms.filter(r => r._id !== roomId));
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to delete room');
+    }
   };
 
   return (
-    <div className="bg-background text-on-surface font-geist min-h-screen">
-      {/* TopAppBar */}
-      <header className="fixed top-0 z-50 w-full bg-surface-container-low border-b border-outline-variant h-[40px] flex justify-between items-center px-gutter">
-        <div className="flex items-center gap-6">
-          <span 
-            className="font-geist text-[20px] font-bold text-primary tracking-tight cursor-pointer"
-            onClick={handleLogoClick}
-          >
-            CollabCode
-          </span>
-          <nav className="hidden md:flex gap-4 items-center">
-            <Link className="text-on-surface-variant font-medium hover:bg-surface-container-highest transition-colors duration-200 px-2 py-0.5 rounded" to="/rooms">Rooms</Link>
-            <Link className="text-on-surface-variant font-medium hover:bg-surface-container-highest transition-colors duration-200 px-2 py-0.5 rounded" to="/community">Community</Link>
-          </nav>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <button 
-              className="text-on-surface-variant hover:bg-surface-container-highest transition-colors duration-200 p-1 rounded flex items-center justify-center"
-              onClick={() => setShowNotifications(!showNotifications)}
-            >
-              <span className="material-symbols-outlined text-[20px]">notifications</span>
-            </button>
-            {showNotifications && (
-              <div className="absolute right-0 mt-2 w-64 bg-surface-container border border-outline-variant rounded-lg shadow-xl z-50 p-4">
-                <h4 className="text-[14px] font-bold mb-2">Notifications</h4>
-                <p className="text-[12px] text-on-surface-variant text-center py-4">No notifications</p>
-              </div>
-            )}
-          </div>
-          <button 
-            className="text-on-surface-variant hover:bg-surface-container-highest transition-colors duration-200 p-1 rounded flex items-center justify-center"
-            onClick={() => navigate('/settings')}
-          >
-            <span className="material-symbols-outlined text-[20px]">settings</span>
-          </button>
-          <div className="relative">
-            <div 
-              className="h-6 w-6 rounded-full border border-secondary p-0.5 ml-1 overflow-hidden cursor-pointer"
-              onClick={() => setShowProfileDropdown(!showProfileDropdown)}
-            >
-              <img 
-                alt="User avatar" 
-                className="w-full h-full object-cover rounded-full" 
-                src={user?.avatar || "https://lh3.googleusercontent.com/aida-public/AB6AXuBEh_KeIWO5dTERgK2owPYV_F0G_UMgmssS4cOyL89GDQCyZsVojo-RljMwB07HHan7ZE3gJjgCsIdep109qbte83s0xa_xyrf7zww_2dkae724Lg0UL1018Agm6XdlsReg6t_yp6j9bIn43L0VCvdTjhP16yhYIv3F1d7o3J-fGi59xhan6n4-Uddm4X6EljrSCn19PG5F3j4O4d9pJ1vbogzyeLBIXvhs9H7ari8rJ_H0DFZKDuPRbD0M2hmIZr2DVuRj4PLmx_M"}
-              />
-            </div>
-            {showProfileDropdown && (
-              <div className="absolute right-0 mt-2 w-48 bg-surface-container border border-outline-variant rounded-lg shadow-xl z-50 overflow-hidden">
-                <button className="w-full text-left px-4 py-2 text-[14px] hover:bg-surface-container-highest transition-colors">Profile</button>
-                <button className="w-full text-left px-4 py-2 text-[14px] hover:bg-surface-container-highest transition-colors" onClick={() => navigate('/settings')}>Account Settings</button>
-                <div className="border-t border-outline-variant my-1"></div>
-                <button 
-                  className="w-full text-left px-4 py-2 text-[14px] text-error hover:bg-surface-container-highest transition-colors"
-                  onClick={handleLogout}
-                >
-                  Logout
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
+    <div className="bg-background text-on-surface font-geist selection:bg-primary/30 min-h-screen">
+      {isCreateModalOpen && (
+        <CreateRoomModal 
+          onClose={() => setIsCreateModalOpen(false)}
+          onSuccess={(room) => {
+            setIsCreateModalOpen(false);
+            navigate(`/workspace/${room._id}`);
+          }}
+        />
+      )}
 
-      <main className="pt-[40px] min-h-screen">
-        <div className="max-w-7xl mx-auto px-gutter py-8">
-          {/* Hero Action Area */}
-          <section className="grid grid-cols-1 md:grid-cols-12 gap-6 mb-12">
-            {/* Primary CTA: Create New Room */}
+      <Navbar />
+
+      <main className="pt-[40px]">
+        <div className="max-w-7xl mx-auto px-gutter py-6">
+          {/* Top Row: Hero & Join */}
+          <section className="grid grid-cols-1 lg:grid-cols-12 gap-4 mb-8">
             <div 
-              className="md:col-span-8 group relative overflow-hidden rounded-xl bg-primary-container p-8 flex flex-col justify-between min-h-[220px] cursor-pointer transition-all hover:brightness-110 active:scale-[0.98]"
-              onClick={handleCreateRoom}
+              onClick={() => setIsCreateModalOpen(true)}
+              className="lg:col-span-8 group relative overflow-hidden rounded-xl bg-primary-container p-6 flex flex-col justify-between min-h-[160px] cursor-pointer transition-all hover:brightness-110 active:scale-[0.99]"
             >
-              <div className="relative z-10">
-                <h2 className="font-geist text-[28px] font-semibold text-on-primary-container mb-2">Initialize Workspace</h2>
-                <p className="text-on-primary-container/80 max-w-md">Launch a new real-time collaborative room with optimized environments for React, TypeScript, or Python.</p>
+              <div className="relative z-10 text-left">
+                <h2 className="font-geist text-[24px] font-bold text-on-primary-container mb-1">Initialize Workspace</h2>
+                <p className="text-on-primary-container/80 max-w-md text-[13px]">Launch a fresh collaborative room for React, Python, or Java.</p>
               </div>
-              <div className="relative z-10 flex items-center gap-3 mt-4">
-                <button className="bg-on-primary-container text-white px-6 py-3 rounded font-bold flex items-center gap-2 transition-transform group-hover:translate-x-1">
+              <div className="relative z-10 mt-4">
+                <button className="bg-on-primary-container text-white px-4 py-2 rounded font-bold flex items-center gap-2 transition-transform group-hover:translate-x-1 font-mono text-[11px] uppercase tracking-wider">
                   Create New Room
-                  <span className="material-symbols-outlined">add_circle</span>
+                  <span className="material-symbols-outlined text-[18px]">add_circle</span>
                 </button>
               </div>
-              {/* Aesthetic Background Pattern */}
-              <div className="absolute right-[-20px] bottom-[-20px] opacity-10 rotate-12 group-hover:rotate-0 transition-transform duration-700">
-                <span className="material-symbols-outlined text-[240px]">terminal</span>
+              <div className="absolute right-[-10px] bottom-[-10px] opacity-10 rotate-12 group-hover:rotate-0 transition-transform duration-700">
+                <span className="material-symbols-outlined text-[160px]">terminal</span>
               </div>
             </div>
 
-            {/* Secondary Action: Join via ID */}
-            <div className="md:col-span-4 bg-surface-container border border-outline-variant rounded-xl p-8 flex flex-col justify-center">
-              <h3 className="font-geist text-[20px] font-semibold text-on-surface mb-4">Join Room</h3>
-              <div className="space-y-4">
+            <div className="lg:col-span-4 bg-surface-container border border-outline-variant rounded-xl p-6 flex flex-col justify-center text-left">
+              <h3 className="font-geist text-[16px] font-bold text-on-surface mb-3 uppercase tracking-tight">Join Room</h3>
+              <form onSubmit={handleJoinRoom} className="space-y-3">
                 <div className="relative">
                   <input 
-                    className="w-full bg-surface-container-lowest border border-outline-variant rounded p-3 font-mono text-[14px] text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all placeholder:text-on-surface-variant/40" 
-                    placeholder="COLLAB_ROOM_XXX" 
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded p-2.5 font-mono text-[13px] text-on-surface focus:outline-none focus:border-primary transition-all placeholder:text-on-surface-variant/40" 
+                    placeholder="ENTER INVITE CODE OR ROOM ID" 
                     type="text"
+                    value={inviteCode}
+                    onChange={(e) => setInviteCode(e.target.value)}
                   />
-                  <span className="absolute right-3 top-3.5 material-symbols-outlined text-on-surface-variant text-[18px]">fingerprint</span>
                 </div>
-                <button className="w-full bg-secondary text-on-secondary px-6 py-3 rounded font-bold hover:opacity-90 transition-opacity">
+                <button type="submit" className="w-full bg-secondary text-on-secondary px-4 py-2.5 rounded font-bold hover:opacity-90 transition-opacity font-mono text-[11px] uppercase tracking-wider">
                   Join Session
                 </button>
-              </div>
+              </form>
             </div>
           </section>
 
-          {/* Workspace Section Header */}
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <span className="material-symbols-outlined text-primary">history</span>
-              <h2 className="font-geist text-[20px] font-semibold">Recent Rooms</h2>
+          {/* Stats & Header Row */}
+          <div className="flex flex-col md:flex-row gap-4 mb-6">
+            <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="glass-panel p-3 rounded-lg border border-outline-variant/30 flex flex-col items-center justify-center">
+                <span className="font-mono text-[9px] font-bold text-on-surface-variant uppercase tracking-widest">Created</span>
+                <span className="text-[18px] font-bold text-primary font-mono">{user?.stats?.roomsCreated || 0}</span>
+              </div>
+              <div className="glass-panel p-3 rounded-lg border border-outline-variant/30 flex flex-col items-center justify-center">
+                <span className="font-mono text-[9px] font-bold text-on-surface-variant uppercase tracking-widest">Collabs</span>
+                <span className="text-[18px] font-bold text-secondary font-mono">{user?.stats?.collaborators || 0}</span>
+              </div>
+              <div className="glass-panel p-3 rounded-lg border border-outline-variant/30 flex flex-col items-center justify-center">
+                <span className="font-mono text-[9px] font-bold text-on-surface-variant uppercase tracking-widest">Score</span>
+                <span className="text-[18px] font-bold text-on-surface font-mono">{user?.stats?.contributions || 0}</span>
+              </div>
+              <div className="glass-panel p-3 rounded-lg border border-outline-variant/30 flex flex-col items-center justify-center">
+                <span className="font-mono text-[9px] font-bold text-on-surface-variant uppercase tracking-widest">Active</span>
+                <span className="text-[18px] font-bold text-tertiary font-mono">{rooms.length}</span>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <button className="p-2 rounded bg-surface-container hover:bg-surface-container-high transition-colors border border-outline-variant">
-                <span className="material-symbols-outlined">filter_list</span>
-              </button>
-              <button className="p-2 rounded bg-surface-container hover:bg-surface-container-high transition-colors border border-outline-variant">
-                <span className="material-symbols-outlined">grid_view</span>
-              </button>
+          </div>
+
+          {/* Pending Invitations Section */}
+          {invitations.length > 0 && (
+            <section className="mb-8">
+              <div className="flex items-center gap-2 mb-4 border-b border-outline-variant/30 pb-2">
+                <span className="material-symbols-outlined text-secondary text-[20px]">mail</span>
+                <h2 className="font-geist text-[18px] font-bold">Pending Invitations</h2>
+                <span className="bg-secondary text-on-secondary px-2 py-0.5 rounded-full text-[10px] font-bold font-mono">{invitations.length}</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {invitations.map((inv) => (
+                  <div key={inv._id} className="glass-panel border-2 border-secondary/30 rounded-lg p-5 flex flex-col justify-between bg-secondary/5">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="flex items-center gap-3">
+                        <img 
+                          src={inv.sender.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(inv.sender.name)}`} 
+                          alt={inv.sender.name} 
+                          className="w-10 h-10 rounded-lg border border-outline-variant"
+                        />
+                        <div>
+                          <p className="font-geist text-[15px] font-bold text-on-surface">{inv.sender.name}</p>
+                          <p className="font-mono text-[10px] text-on-surface-variant uppercase tracking-widest">Invited you</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-surface-container-lowest/50 p-3 rounded-lg border border-outline-variant/30 mb-4">
+                      <p className="font-geist text-[14px] font-bold text-on-surface truncate">{inv.roomId.name}</p>
+                      <div className="flex items-center gap-1 mt-1 text-on-surface-variant">
+                        <span className="material-symbols-outlined text-[12px]">code</span>
+                        <span className="font-mono text-[10px] uppercase">{inv.roomId.language}</span>
+                        <span className="mx-1">•</span>
+                        <span className="font-mono text-[10px] uppercase">{inv.role}</span>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => handleAcceptInvite(inv._id)}
+                        className="flex-1 bg-primary text-on-primary py-2 rounded font-mono text-[10px] font-bold uppercase hover:opacity-90 transition-opacity"
+                      >
+                        Accept
+                      </button>
+                      <button 
+                        onClick={() => handleDeclineInvite(inv._id)}
+                        className="flex-1 bg-surface-container-highest text-on-surface py-2 rounded font-mono text-[10px] font-bold uppercase hover:opacity-90 transition-opacity border border-outline-variant"
+                      >
+                        Decline
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          <div className="flex items-center justify-between mb-4 border-b border-outline-variant/30 pb-2">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-primary text-[20px]">history</span>
+              <h2 className="font-geist text-[18px] font-bold">Recent Rooms</h2>
+            </div>
+            <div 
+              onClick={() => setIsCreateModalOpen(true)}
+              className="flex items-center gap-2 text-primary cursor-pointer hover:underline font-mono text-[11px] font-bold uppercase tracking-wider"
+            >
+              <span className="material-symbols-outlined text-[18px]">add</span>
+              New Room
             </div>
           </div>
 
           {/* Dashboard Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {rooms.length > 0 ? (
-              rooms.map((room: any) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {/* New Room Card (Inline) */}
+            <div 
+              className="border-2 border-dashed border-outline-variant rounded-lg p-5 flex flex-col items-center justify-center text-on-surface-variant hover:border-primary hover:text-primary transition-all cursor-pointer group min-h-[160px]"
+              onClick={() => setIsCreateModalOpen(true)}
+            >
+              <span className="material-symbols-outlined text-[32px] mb-1 group-hover:scale-110 transition-transform">add</span>
+              <span className="font-mono text-[10px] font-bold uppercase tracking-wider">Initialize New Room</span>
+            </div>
+
+            {loading ? (
+               [1, 2, 3].map(i => (
+                <div key={i} className="glass-surface border border-outline-variant rounded-lg p-5 h-[160px] animate-pulse"></div>
+               ))
+            ) : (
+              rooms.map((room) => (
                 <div 
-                  key={room.id}
-                  className="glass-panel border border-outline-variant rounded-lg p-5 group hover:border-primary/50 transition-all cursor-pointer presence-glow-blue translate-y-0 hover:-translate-y-1"
-                  onClick={() => handleJoinRoom(room.id)}
+                  key={room._id} 
+                  onClick={() => navigate(`/workspace/${room._id}`)}
+                  className="glass-panel border border-outline-variant rounded-lg p-5 group hover:border-primary/50 transition-all cursor-pointer presence-glow-blue text-left flex flex-col justify-between min-h-[160px]"
                 >
-                  {/* Room Card Content Template */}
-                  <div className="flex justify-between items-start mb-6">
+                  <div className="flex justify-between items-start">
                     <div className="flex flex-col">
-                      <span className="font-mono text-[12px] text-on-surface-variant mb-1">ID: {room.id}</span>
-                      <h3 className="font-geist text-[20px] font-semibold text-on-surface group-hover:text-primary transition-colors">{room.name}</h3>
+                      <span className="font-mono text-[10px] text-on-surface-variant mb-1 uppercase tracking-tighter truncate w-32">ID: {room.inviteCode}</span>
+                      <h3 className="font-geist text-[18px] font-bold text-on-surface group-hover:text-primary transition-colors truncate w-40">{room.name}</h3>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex -space-x-2">
+                        {room.collaborators.slice(0, 2).map((c: any, i: number) => (
+                          <img key={i} className="w-6 h-6 rounded-full border-2 border-surface bg-surface-container-highest" src={c.user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(c.user.name)}&size=24`} alt="" />
+                        ))}
+                      </div>
+                      {room.owner._id === user?.id && (
+                        <button 
+                          onClick={(e) => handleDeleteRoom(e, room._id)}
+                          className="p-1 text-on-surface-variant hover:text-error transition-colors rounded hover:bg-error/10"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">delete</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="mt-4">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="flex items-center gap-1 bg-surface-container-highest px-2 py-0.5 rounded">
+                        <span className="material-symbols-outlined text-[14px] text-blue-400">code</span>
+                        <span className="font-mono text-[10px] uppercase">{room.language}</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-on-surface-variant">
+                        <span className="material-symbols-outlined text-[14px]">schedule</span>
+                        <span className="font-geist text-[11px]">{new Date(room.updatedAt).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between pt-3 border-t border-outline-variant/30">
+                      <div className="flex items-center gap-1.5 text-on-surface-variant">
+                        <span className="font-mono text-[9px] uppercase font-bold tracking-wider">Access: {room.visibility}</span>
+                      </div>
+                      <span className="material-symbols-outlined text-on-surface-variant group-hover:translate-x-1 transition-transform text-[18px]">arrow_forward</span>
                     </div>
                   </div>
                 </div>
               ))
-            ) : (
-              <div className="col-span-full py-12 flex flex-col items-center justify-center text-on-surface-variant">
-                <span className="material-symbols-outlined text-[48px] mb-2 opacity-20">history</span>
-                <p className="font-mono text-[14px]">No rooms yet</p>
-                <button 
-                  onClick={handleCreateRoom}
-                  className="mt-4 text-primary font-bold hover:underline"
-                >
-                  Create your first room
-                </button>
-              </div>
             )}
-
-            {/* Room Card (Empty Slot / Create Button) */}
-            <div 
-              className="border-2 border-dashed border-outline-variant rounded-lg p-5 flex flex-col items-center justify-center text-on-surface-variant hover:border-primary hover:text-primary transition-all cursor-pointer group min-h-[180px]"
-              onClick={handleCreateRoom}
-            >
-              <span className="material-symbols-outlined text-[32px] mb-2 group-hover:scale-110 transition-transform">add</span>
-              <span className="font-mono text-[11px] font-bold uppercase tracking-wider">New Room</span>
-            </div>
           </div>
         </div>
       </main>
@@ -203,16 +300,16 @@ const RoomDashboard: React.FC = () => {
       {/* BottomNavBar (Mobile Only) */}
       <footer className="md:hidden fixed bottom-0 w-full z-50 h-[24px] bg-surface-container-lowest border-t border-outline-variant px-4 flex justify-between items-center">
         <div className="flex items-center gap-2 text-on-surface">
-          <span className="material-symbols-outlined text-[14px]">account_tree</span>
-          <span className="font-mono text-[10px]">main</span>
+          <span className="material-symbols-outlined text-[14px]">dashboard</span>
+          <span className="font-mono text-[10px]">Dashboard</span>
         </div>
         <div className="flex items-center gap-2 text-on-surface-variant">
-          <span className="material-symbols-outlined text-[14px]">code</span>
-          <span className="font-mono text-[10px]">TypeScript</span>
+          <span className="material-symbols-outlined text-[14px]">person</span>
+          <span className="font-mono text-[10px]">{user?.name}</span>
         </div>
         <div className="flex items-center gap-2 text-on-surface-variant">
-          <span className="material-symbols-outlined text-[14px]">wifi_tethering</span>
-          <span className="font-mono text-[10px]">Connected</span>
+          <span className={`w-1.5 h-1.5 rounded-full bg-secondary`}></span>
+          <span className="font-mono text-[10px]">Online</span>
         </div>
       </footer>
     </div>
