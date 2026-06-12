@@ -11,6 +11,7 @@ import { setupWSConnection } from 'y-websocket/bin/utils';
 import * as pty from 'node-pty';
 import os from 'os';
 import fs from 'fs';
+import path from 'path';
 import mongoose from 'mongoose';
 import connectDB from './config/db.js';
 import authRoutes from './routes/authRoutes.js';
@@ -46,6 +47,12 @@ criticalEnvVars.forEach(key => {
 
 // Connect to MongoDB
 connectDB();
+
+// Ensure a dedicated workspace directory exists
+const WORKSPACE_ROOT = path.join(os.tmpdir(), 'collabcode_workspaces');
+if (!fs.existsSync(WORKSPACE_ROOT)) {
+  fs.mkdirSync(WORKSPACE_ROOT, { recursive: true });
+}
 
 const app = express();
 const httpServer = createServer(app);
@@ -168,10 +175,16 @@ httpServer.on('upgrade', async (request, socket, head) => {
     const cookieHeader = request.headers.cookie || '';
     let token = cookieHeader.split('token=')[1]?.split(';')[0];
     
-    // Fallback to query param for token
+    // Fallback to query param for token - more robust parsing
     if (!token) {
-      const urlObj = new URL(url, `http://${request.headers.host}`);
-      token = urlObj.searchParams.get('token') || undefined;
+      try {
+        const fullUrl = new URL(url, `http://${request.headers.host || 'localhost'}`);
+        token = fullUrl.searchParams.get('token') || undefined;
+      } catch (e) {
+        // Fallback for malformed URLs
+        const match = url.match(/token=([^&]+)/);
+        if (match) token = match[1];
+      }
     }
     
     if (!token) {
@@ -449,6 +462,11 @@ io.on('connection', (socket) => {
       socket.data.canEditTerminal = true;
       socket.data.currentTerminalRoomId = roomId;
 
+      const roomWorkspace = path.join(WORKSPACE_ROOT, roomId);
+      if (!fs.existsSync(roomWorkspace)) {
+        fs.mkdirSync(roomWorkspace, { recursive: true });
+      }
+
       // Find shell path dynamically
       const shells = [
         process.env.SHELL, 
@@ -468,17 +486,17 @@ io.on('connection', (socket) => {
         TERM: 'xterm-256color',
         COLORTERM: 'truecolor',
         LANG: 'en_US.UTF-8',
-        HOME: process.env.HOME || '/tmp'
+        HOME: roomWorkspace
       };
 
       for (const selectedShell of shells) {
         try {
-          console.log(`[Terminal] Attempting to spawn shell: "${selectedShell}" with cwd: "${process.cwd()}"`);
+          console.log(`[Terminal] Attempting to spawn shell: "${selectedShell}" with cwd: "${roomWorkspace}"`);
           terminal = pty.spawn(selectedShell, [], {
             name: 'xterm-color',
             cols: 80,
             rows: 24,
-            cwd: process.cwd(),
+            cwd: roomWorkspace,
             env: safeEnv,
           });
           if (terminal) {
