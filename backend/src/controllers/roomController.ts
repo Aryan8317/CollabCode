@@ -444,9 +444,11 @@ export const restoreRoomVersion = async (req: any, res: Response) => {
 // @route   POST /api/rooms/:id/invite
 // @access  Private
 export const inviteToRoom = async (req: any, res: Response) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
+  let session;
   try {
+    session = await mongoose.startSession();
+    session.startTransaction();
+
     const { email, role } = req.body;
 
     // Basic email validation
@@ -530,33 +532,31 @@ export const inviteToRoom = async (req: any, res: Response) => {
     await session.commitTransaction();
     session.endSession();
 
-    // 3. Send Email (Post-transaction)
+    // 3. Send Email (Post-transaction, non-blocking)
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    try {
-      await sendEmail({
-        email: email,
-        subject: `Invitation to join ${room.name}`,
-        message: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
-            <h2 style="color: #6200ee;">You've been invited!</h2>
-            <p>${req.user.name} has invited you to collaborate on the room <strong>${room.name}</strong> as a <strong>${role}</strong>.</p>
-            <div style="margin: 30px 0; text-align: center;">
-              <a href="${frontendUrl}/workspace/${room._id}" style="background-color: #6200ee; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Open Workspace</a>
-            </div>
-            <p>If you don't have an account, please sign up using this email.</p>
+    sendEmail({
+      email: email,
+      subject: `Invitation to join ${room.name}`,
+      message: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
+          <h2 style="color: #6200ee;">You've been invited!</h2>
+          <p>${req.user.name} has invited you to collaborate on the room <strong>${room.name}</strong> as a <strong>${role}</strong>.</p>
+          <div style="margin: 30px 0; text-align: center;">
+            <a href="${frontendUrl}/workspace/${room._id}" style="background-color: #6200ee; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Open Workspace</a>
           </div>
-        `,
-      });
-    } catch (emailErr) {
-      console.error('Email invitation failed to send:', emailErr);
-    }
+          <p>If you don't have an account, please sign up using this email.</p>
+        </div>
+      `,
+    }).catch(emailErr => console.error('Email invitation failed to send:', emailErr));
 
-    res.json({ message: 'Invitation sent successfully' });
+    return res.json({ message: 'Invitation sent successfully' });
   } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
+    if (session) {
+      await session.abortTransaction();
+      session.endSession();
+    }
     console.error('Invitation error:', error);
-    res.status(500).json({ message: 'Server error during invitation' });
+    return res.status(500).json({ message: 'Server error during invitation' });
   }
 };
 
