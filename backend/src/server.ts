@@ -50,12 +50,46 @@ connectDB();
 const app = express();
 const httpServer = createServer(app);
 
-// CORS configuration
-const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+// CORS configuration - flexible matching
+const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').trim();
+const allowedOrigins = [frontendUrl, frontendUrl.replace(/\/$/, '')];
+
 app.use(cors({
-  origin: frontendUrl,
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    const isAllowed = allowedOrigins.some(allowed => 
+      origin === allowed || 
+      origin === allowed + '/' || 
+      (allowed.includes('vercel.app') && origin.endsWith('.vercel.app'))
+    );
+
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      console.warn(`[CORS] Rejected origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
 }));
+
+// Debug route
+app.get('/api/debug', (req, res) => {
+  res.json({
+    nodeEnv: process.env.NODE_ENV,
+    frontendUrl: process.env.FRONTEND_URL,
+    allowedOrigins,
+    headers: {
+      origin: req.headers.origin,
+      cookie: !!req.headers.cookie,
+    },
+    cookies: {
+      hasToken: !!req.cookies?.token,
+    }
+  });
+});
 
 // Rate limiting
 const authLimiter = rateLimit({
@@ -83,7 +117,16 @@ app.use('/api/auth/forgot-password', emailLimiter);
 // Setup Socket.IO for general app events (chat, notifications, terminal)
 const io = new Server(httpServer, {
   cors: {
-    origin: frontendUrl,
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      const isAllowed = allowedOrigins.some(allowed => 
+        origin === allowed || 
+        origin === allowed + '/' || 
+        (allowed.includes('vercel.app') && origin.endsWith('.vercel.app'))
+      );
+      if (isAllowed) callback(null, true);
+      else callback(new Error('Not allowed by CORS'));
+    },
     methods: ['GET', 'POST'],
     credentials: true,
   },
@@ -123,9 +166,16 @@ httpServer.on('upgrade', async (request, socket, head) => {
 
   if (url.startsWith('/yjs/')) {
     const cookieHeader = request.headers.cookie || '';
-    const token = cookieHeader.split('token=')[1]?.split(';')[0];
+    let token = cookieHeader.split('token=')[1]?.split(';')[0];
+    
+    // Fallback to query param for token
+    if (!token) {
+      const urlObj = new URL(url, `http://${request.headers.host}`);
+      token = urlObj.searchParams.get('token') || undefined;
+    }
     
     if (!token) {
+      console.warn(`[Yjs] Upgrade rejected: No token found for ${url}`);
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
       socket.destroy();
       return;
@@ -137,6 +187,7 @@ httpServer.on('upgrade', async (request, socket, head) => {
         wss.emit('connection', ws, request);
       });
     } catch (err) {
+      console.error(`[Yjs] Upgrade rejected: Token verification failed for ${url}`);
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
       socket.destroy();
     }

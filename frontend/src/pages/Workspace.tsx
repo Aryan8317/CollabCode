@@ -98,10 +98,12 @@ const Workspace: React.FC = () => {
     if (!roomId || !ydoc) return;
 
     const wsBaseUrl = (import.meta.env.VITE_WS_URL || 'ws://localhost:5001').trim();
-    const wsUrl = `${wsBaseUrl}/yjs`;
-    console.log(`[Yjs] Connecting to: ${wsUrl}/${roomId}`);
+    const token = localStorage.getItem('token');
+    // Using a hack to pass token via room name as y-websocket appends room to url
+    const roomWithToken = `${roomId}${token ? `?token=${token}` : ''}`;
+    console.log(`[Yjs] Connecting to: ${wsBaseUrl}/yjs/${roomWithToken}`);
 
-    const newProvider = new WebsocketProvider(wsUrl, roomId, ydoc);
+    const newProvider = new WebsocketProvider(`${wsBaseUrl}/yjs`, roomWithToken, ydoc);
 
     newProvider.on('status', (event: any) => {
       console.log(`[Yjs] Connection status for ${roomId}:`, event.status);

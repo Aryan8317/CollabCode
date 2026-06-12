@@ -94,9 +94,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (user && !socket) {
       const socketUrl = (import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001').trim();
+      const token = localStorage.getItem('token');
+      
       activeSocket = io(socketUrl, {
         withCredentials: true,
         autoConnect: true,
+        auth: { token },
       });
 
       activeSocket.on('connect', () => {
@@ -124,6 +127,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setError(null);
     try {
       const { data } = await API.post('/auth/login', { email, password });
+      if (data.token) localStorage.setItem('token', data.token);
       setUser(data.user);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Login failed');
@@ -146,6 +150,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setError(null);
     try {
       const { data } = await API.post('/auth/verify-otp', { email, otp });
+      if (data.token) localStorage.setItem('token', data.token);
       setUser(data.user);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Verification failed');
@@ -188,6 +193,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     try {
       const { data } = await API.post('/auth/github', { code });
+      if (data.token) localStorage.setItem('token', data.token);
       setUser(data.user);
     } catch (err: any) {
       setError(err.response?.data?.message || 'GitHub Login failed');
@@ -202,6 +208,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     try {
       const { data } = await API.post('/auth/google', { code });
+      if (data.token) localStorage.setItem('token', data.token);
       setUser(data.user);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Google Login failed');
@@ -217,6 +224,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err) {
       console.error('Logout error:', err);
     }
+    localStorage.removeItem('token');
     if (socket) {
       socket.disconnect();
       setSocket(null);
