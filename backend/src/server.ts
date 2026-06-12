@@ -344,6 +344,31 @@ const flushRoomFilesToDB = async (roomId: string) => {
   }
 };
 
+const syncFilesToDisk = async (roomId: string) => {
+  if (!roomState[roomId]) return;
+  const roomWorkspace = path.join(WORKSPACE_ROOT, roomId);
+  
+  try {
+    if (!fs.existsSync(roomWorkspace)) {
+      fs.mkdirSync(roomWorkspace, { recursive: true });
+    }
+
+    for (const [filePath, content] of Object.entries(roomState[roomId].files)) {
+      // Security check: ensure file path doesn't try to escape workspace
+      const fullPath = path.join(roomWorkspace, filePath);
+      if (!fullPath.startsWith(roomWorkspace)) continue;
+
+      const dir = path.dirname(fullPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(fullPath, content);
+    }
+  } catch (err) {
+    console.error(`Error syncing files to disk for room ${roomId}:`, err);
+  }
+};
+
 export const deleteRoomState = (roomId: string) => {
   delete roomState[roomId];
   if (saveTimeouts[roomId]) {
@@ -423,6 +448,7 @@ io.on('connection', (socket) => {
                 roomState[roomId].files[f.path] = f.content;
               });
               console.log(`Loaded ${room.files.length} files from DB for room ${roomId}`);
+              await syncFilesToDisk(roomId);
             }
           }
         }
@@ -476,6 +502,8 @@ io.on('connection', (socket) => {
 
       socket.data.canEditTerminal = true;
       socket.data.currentTerminalRoomId = roomId;
+
+      await syncFilesToDisk(roomId);
 
       const roomWorkspace = path.join(WORKSPACE_ROOT, roomId);
       if (!fs.existsSync(roomWorkspace)) {
@@ -579,6 +607,7 @@ io.on('connection', (socket) => {
     }
     
     roomState[roomId].files[fileName] = code;
+    syncFilesToDisk(roomId);
 
     // Debounced save to MongoDB
     if (saveTimeouts[roomId]) clearTimeout(saveTimeouts[roomId]);
@@ -597,6 +626,7 @@ io.on('connection', (socket) => {
     const content = type === 'file' ? getLanguageTemplate(language) : '';
     if (type === 'file') {
       roomState[roomId].files[path] = content;
+      syncFilesToDisk(roomId);
     }
 
     try {
@@ -619,7 +649,20 @@ io.on('connection', (socket) => {
     if (roomState[roomId].files[oldPath]) {
       roomState[roomId].files[newPath] = roomState[roomId].files[oldPath];
       delete roomState[roomId].files[oldPath];
+      
+      // Delete old file from disk
+      const roomWorkspace = path.join(WORKSPACE_ROOT, roomId);
+      const oldFullPath = path.join(roomWorkspace, oldPath);
+      if (fs.existsSync(oldFullPath)) {
+        try {
+          fs.rmSync(oldFullPath, { recursive: true, force: true });
+        } catch (err) {
+          console.error(`Error deleting old file ${oldPath} from disk:`, err);
+        }
+      }
     }
+    
+    syncFilesToDisk(roomId);
 
     try {
       const room = await Room.findById(roomId);
@@ -651,7 +694,20 @@ io.on('connection', (socket) => {
     if (roomState[roomId].files[oldPath]) {
       roomState[roomId].files[newPath] = roomState[roomId].files[oldPath];
       delete roomState[roomId].files[oldPath];
+
+      // Delete old file from disk
+      const roomWorkspace = path.join(WORKSPACE_ROOT, roomId);
+      const oldFullPath = path.join(roomWorkspace, oldPath);
+      if (fs.existsSync(oldFullPath)) {
+        try {
+          fs.rmSync(oldFullPath, { recursive: true, force: true });
+        } catch (err) {
+          console.error(`Error deleting old file ${oldPath} from disk:`, err);
+        }
+      }
     }
+    
+    syncFilesToDisk(roomId);
 
     try {
       const room = await Room.findById(roomId);
@@ -695,6 +751,7 @@ io.on('connection', (socket) => {
           const newPath = parts.join('/');
           
           roomState[roomId].files[newPath] = roomState[roomId].files[path] || '';
+          syncFilesToDisk(roomId);
 
           const newFile = {
             name: newName,
@@ -724,12 +781,36 @@ io.on('connection', (socket) => {
 
     if (type === 'file') {
       delete roomState[roomId].files[path];
+      
+      // Delete from disk
+      const roomWorkspace = path.join(WORKSPACE_ROOT, roomId);
+      const fullPath = path.join(roomWorkspace, path);
+      if (fs.existsSync(fullPath)) {
+        try {
+          fs.rmSync(fullPath, { recursive: true, force: true });
+        } catch (err) {
+          console.error(`Error deleting file ${path} from disk:`, err);
+        }
+      }
     } else {
       // Delete all nested files from memory
       Object.keys(roomState[roomId].files).forEach(fPath => {
         if (fPath.startsWith(path + '/')) delete roomState[roomId].files[fPath];
       });
+
+      // Delete directory from disk
+      const roomWorkspace = path.join(WORKSPACE_ROOT, roomId);
+      const fullPath = path.join(roomWorkspace, path);
+      if (fs.existsSync(fullPath)) {
+        try {
+          fs.rmSync(fullPath, { recursive: true, force: true });
+        } catch (err) {
+          console.error(`Error deleting folder ${path} from disk:`, err);
+        }
+      }
     }
+
+    syncFilesToDisk(roomId);
 
     try {
       if (type === 'file') {
