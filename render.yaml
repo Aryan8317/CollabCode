@@ -1,9 +1,7 @@
 services:
   - type: web
-    name: collabcode-backend
+    name: collabcode-api
     env: node
-    region: oregon
-    plan: free
     rootDir: backend
     buildCommand: npm install && npm run build
     startCommand: npm start
@@ -13,20 +11,20 @@ services:
       - key: PORT
         value: 10000
       - key: MONGO_URI
-        value: YOUR_MONGO_URI_HERE
+        sync: false
       - key: JWT_SECRET
         generateValue: true
       - key: FRONTEND_URL
-        value: https://your-app.vercel.app
+        sync: false
       - key: GMAIL_USER
-        value: your-email@gmail.com
+        sync: false
       - key: GMAIL_PASS
-        value: your-app-password
+        sync: false
       - key: GITHUB_CLIENT_ID
-        value: your-github-client-id
+        sync: false
       - key: GITHUB_CLIENT_SECRET
-        value: your-github-client-secret
+        sync: false
       - key: GOOGLE_Client_ID
-        value: your-google-client-id
+        sync: false
       - key: GOOGLE_Client_secret
-        value: your-google-client-secret
+        sync: false
