@@ -97,7 +97,7 @@ const Workspace: React.FC = () => {
   useEffect(() => {
     if (!roomId || !ydoc) return;
 
-    const wsBaseUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:5001';
+    const wsBaseUrl = (import.meta.env.VITE_WS_URL || 'ws://localhost:5001').trim();
     const wsUrl = `${wsBaseUrl}/yjs`;
     console.log(`[Yjs] Connecting to: ${wsUrl}/${roomId}`);
 

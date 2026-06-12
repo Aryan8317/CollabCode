@@ -20,13 +20,13 @@ const Signup: React.FC = () => {
   }, [isAuthenticated, navigate]);
 
   const handleGitHubLogin = () => {
-    const clientId = import.meta.env.VITE_GITHUB_CLIENT_ID;
+    const clientId = (import.meta.env.VITE_GITHUB_CLIENT_ID || '').trim();
     const redirectUri = `${window.location.origin}/auth/github/callback`;
     window.location.href = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=user:email`;
   };
 
   const handleGoogleLogin = () => {
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    const clientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim();
     const redirectUri = `${window.location.origin}/auth/google/callback`;
     const scope = 'https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email';
     window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&access_type=offline&prompt=consent`;

@@ -93,7 +93,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let activeSocket: Socket | null = null;
 
     if (user && !socket) {
-      const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001';
+      const socketUrl = (import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001').trim();
       activeSocket = io(socketUrl, {
         withCredentials: true,
         autoConnect: true,

@@ -26,6 +26,24 @@ import jwt from 'jsonwebtoken';
 
 dotenv.config();
 
+// Trim critical environment variables to prevent malformed URL/connection errors
+const criticalEnvVars = [
+  'FRONTEND_URL', 
+  'MONGODB_URI', 
+  'JWT_SECRET', 
+  'GITHUB_CLIENT_ID', 
+  'GITHUB_CLIENT_SECRET', 
+  'GOOGLE_Client_ID', 
+  'GOOGLE_Client_secret',
+  'EMAIL_USER',
+  'EMAIL_PASS'
+];
+criticalEnvVars.forEach(key => {
+  if (process.env[key]) {
+    process.env[key] = process.env[key]?.trim();
+  }
+});
+
 // Connect to MongoDB
 connectDB();
 
