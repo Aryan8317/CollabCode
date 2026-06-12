@@ -182,7 +182,7 @@ httpServer.on('upgrade', async (request, socket, head) => {
 
   if (pathname.startsWith('/yjs/')) {
     const cookieHeader = request.headers.cookie || '';
-    let token = cookieHeader.split('token=')[1]?.split(';')[0];
+    let token: string | undefined = cookieHeader.split('token=')[1]?.split(';')[0];
     
     // Fallback to query param for token - more robust parsing
     if (!token) {
