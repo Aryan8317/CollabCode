@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: collabcode-backend
+    env: node
+    region: oregon
+    plan: free
+    rootDir: backend
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGO_URI
+        fromValue: ${MONGO_URI}
+      - key: JWT_SECRET
+        fromValue: ${JWT_SECRET}
+      - key: FRONTEND_URL
+        fromValue: ${FRONTEND_URL}
+      - key: GMAIL_USER
+        fromValue: ${GMAIL_USER}
+      - key: GMAIL_PASS
+        fromValue: ${GMAIL_PASS}
+      - key: GITHUB_CLIENT_ID
+        fromValue: ${GITHUB_CLIENT_ID}
+      - key: GITHUB_CLIENT_SECRET
+        fromValue: ${GITHUB_CLIENT_SECRET}
+      - key: GOOGLE_Client_ID
+        fromValue: ${GOOGLE_Client_ID}
+      - key: GOOGLE_Client_secret
+        fromValue: ${GOOGLE_Client_secret}

@@ -65,20 +65,25 @@ const Workspace: React.FC = () => {
   const bindingRef = useRef<MonacoBinding | null>(null);
   const yProviderRef = useRef<WebsocketProvider | null>(null);
   const ydocRef = useRef<Y.Doc | null>(null);
+  const [ydoc, setYdoc] = useState<Y.Doc | null>(null);
   const currentRoomIdRef = useRef<string | null>(null);
   const activeFilePathRef = useRef(activeFilePath);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Initialize/Reset Y.Doc when roomId changes
-  if (roomId && currentRoomIdRef.current !== roomId) {
-    if (ydocRef.current) {
-      console.log(`[Yjs] Destroying old document for room: ${currentRoomIdRef.current}`);
-      ydocRef.current.destroy();
+  useEffect(() => {
+    if (roomId && currentRoomIdRef.current !== roomId) {
+      if (ydocRef.current) {
+        console.log(`[Yjs] Destroying old document for room: ${currentRoomIdRef.current}`);
+        ydocRef.current.destroy();
+      }
+      console.log(`[Yjs] Initializing new document for room: ${roomId}`);
+      const newDoc = new Y.Doc();
+      ydocRef.current = newDoc;
+      setYdoc(newDoc);
+      currentRoomIdRef.current = roomId;
     }
-    console.log(`[Yjs] Initializing new document for room: ${roomId}`);
-    ydocRef.current = new Y.Doc();
-    currentRoomIdRef.current = roomId;
-  }
+  }, [roomId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -90,44 +95,42 @@ const Workspace: React.FC = () => {
 
   // Setup Yjs Provider once per room
   useEffect(() => {
-    if (!roomId || !ydocRef.current) return;
-    
-    const ydoc = ydocRef.current;
+    if (!roomId || !ydoc) return;
+
     const wsBaseUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:5001';
     const wsUrl = `${wsBaseUrl}/yjs`;
     console.log(`[Yjs] Connecting to: ${wsUrl}/${roomId}`);
-    
-    const provider = new WebsocketProvider(wsUrl, roomId, ydoc);
-    
-    provider.on('status', (event: any) => {
+
+    const newProvider = new WebsocketProvider(wsUrl, roomId, ydoc);
+
+    newProvider.on('status', (event: any) => {
       console.log(`[Yjs] Connection status for ${roomId}:`, event.status);
       if (event.status === 'connected') {
         setIsConnected(true);
       } else {
-        // Only set disconnected if we are not in the process of reconnecting
         if (event.status === 'disconnected') {
            setIsConnected(false);
         }
       }
     });
 
-    provider.on('sync', (isSynced: boolean) => {
+    newProvider.on('sync', (isSynced: boolean) => {
       console.log(`[Yjs] Sync status for ${roomId}:`, isSynced);
     });
 
-    provider.awareness.setLocalStateField('user', { 
+    newProvider.awareness.setLocalStateField('user', { 
       name: username, 
       color: COLORS[Math.floor(Math.random() * COLORS.length)] 
     });
 
-    yProviderRef.current = provider;
+    yProviderRef.current = newProvider;
 
     return () => {
       console.log(`[Yjs] Disconnecting for ${roomId}`);
-      provider.disconnect();
+      newProvider.disconnect();
       yProviderRef.current = null;
     };
-  }, [roomId, username]);
+  }, [roomId, username, ydoc]);
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -739,7 +742,7 @@ const onPresenceUpdate = (payload: any) => {
           isOpen={isSearchOpen} 
           onClose={() => setIsSearchOpen(false)} 
           onSelectResult={handleSelectSearchResult} 
-          ydoc={yProviderRef.current?.doc}
+          ydoc={ydoc || undefined}
         />
         <aside className="flex flex-col h-full w-[260px] bg-surface-container-low border-r border-outline-variant">
           <div className="flex-1 border-b border-outline-variant/30 flex flex-col min-h-0">

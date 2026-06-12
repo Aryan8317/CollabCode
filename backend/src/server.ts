@@ -429,7 +429,7 @@ io.on('connection', (socket) => {
 
       socketTerminals[socket.id] = { terminal, roomId };
 
-      terminal.onData((data) => {
+      terminal.onData((data: string) => {
         socket.emit('terminal-data', data);
       });
 

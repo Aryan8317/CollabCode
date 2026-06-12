@@ -90,24 +90,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Shared Socket Management
   useEffect(() => {
+    let activeSocket: Socket | null = null;
+
     if (user && !socket) {
       const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001';
-      const newSocket = io(socketUrl, {
+      activeSocket = io(socketUrl, {
         withCredentials: true,
         autoConnect: true,
       });
 
-      newSocket.on('connect', () => {
-        newSocket.emit('join-room', `user_${user.id}`);
+      activeSocket.on('connect', () => {
+        activeSocket?.emit('join-room', `user_${user.id}`);
       });
 
-      newSocket.on('connect_error', (err) => {
+      activeSocket.on('connect_error', (err) => {
         if (err.message.includes('Authentication error')) {
           window.dispatchEvent(new CustomEvent('auth:unauthorized'));
         }
       });
 
-      setSocket(newSocket);
+      setSocket(activeSocket);
     }
 
     return () => {

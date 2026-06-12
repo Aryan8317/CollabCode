@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import axios from 'axios';
 import crypto from 'crypto';
 import User from '../models/User.js';
+import Notification from '../models/Notification.js';
 import Invitation from '../models/Invitation.js';
 import Room from '../models/Room.js';
 import Activity from '../models/Activity.js';

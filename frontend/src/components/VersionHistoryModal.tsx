@@ -13,7 +13,7 @@ const VersionHistoryModal: React.FC<VersionHistoryModalProps> = ({ roomId, onClo
   const [saving, setSaving] = useState(false);
   const [versionName, setVersionName] = useState('');
 
-  const fetchVersions = async () => {
+  const fetchVersions = React.useCallback(async () => {
     setLoading(true);
     try {
       const { data } = await API.get(`/rooms/${roomId}/versions`);
@@ -23,11 +23,11 @@ const VersionHistoryModal: React.FC<VersionHistoryModalProps> = ({ roomId, onClo
     } finally {
       setLoading(false);
     }
-  };
+  }, [roomId]);
 
   useEffect(() => {
     fetchVersions();
-  }, [roomId]);
+  }, [fetchVersions]);
 
   const handleSaveVersion = async (e: React.FormEvent) => {
     e.preventDefault();
