@@ -616,27 +616,27 @@ io.on('connection', (socket) => {
     if (callback) callback({ status: 'ok' });
   });
 
-  socket.on('file-create', async ({ roomId, name, path, type, language }: { roomId: string; name: string, path: string, type: 'file' | 'folder', language?: string }) => {
-    if (!roomState[roomId] || !path || path.includes('../')) return;
-    if (name.length > 255 || path.length > 1024) return;
+  socket.on('file-create', async ({ roomId, name, path: filePath, type, language }: { roomId: string; name: string, path: string, type: 'file' | 'folder', language?: string }) => {
+    if (!roomState[roomId] || !filePath || filePath.includes('../')) return;
+    if (name.length > 255 || filePath.length > 1024) return;
     
     const hasPermission = await checkPermissions(socket, roomId, ['Admin', 'Editor']);
     if (!hasPermission) return;
 
     const content = type === 'file' ? getLanguageTemplate(language) : '';
     if (type === 'file') {
-      roomState[roomId].files[path] = content;
+      roomState[roomId].files[filePath] = content;
       syncFilesToDisk(roomId);
     }
 
     try {
       await Room.findByIdAndUpdate(roomId, {
-        $push: { files: { name, path, type, content, language, createdBy: socket.data.userId } }
+        $push: { files: { name, path: filePath, type, content, language, createdBy: socket.data.userId } }
       });
     } catch (err) {
       console.error('Error creating file in DB:', err);
     }
-    io.to(roomId).emit('file-created', { name, path, type, content, language });
+    io.to(roomId).emit('file-created', { name, path: filePath, type, content, language });
   });
 
   socket.on('file-rename', async ({ roomId, oldPath, newPath, newName }: { roomId: string; oldPath: string, newPath: string, newName: string }) => {
@@ -729,7 +729,7 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('file-renamed', { oldPath, newPath, newName });
   });
 
-  socket.on('file-duplicate', async ({ roomId, path }: { roomId: string; path: string }) => {
+  socket.on('file-duplicate', async ({ roomId, path: filePath }: { roomId: string; path: string }) => {
     if (!roomState[roomId]) return;
 
     const hasPermission = await checkPermissions(socket, roomId, ['Admin', 'Editor']);
@@ -738,9 +738,9 @@ io.on('connection', (socket) => {
     try {
       const room = await Room.findById(roomId);
       if (room) {
-        const fileToDuplicate = room.files.find(f => f.path === path);
+        const fileToDuplicate = room.files.find(f => f.path === filePath);
         if (fileToDuplicate && fileToDuplicate.type === 'file') {
-          const parts = path.split('/');
+          const parts = filePath.split('/');
           const originalName = parts.pop() || '';
           const nameParts = originalName.split('.');
           const ext = nameParts.length > 1 ? `.${nameParts.pop()}` : '';
@@ -750,7 +750,7 @@ io.on('connection', (socket) => {
           parts.push(newName);
           const newPath = parts.join('/');
           
-          roomState[roomId].files[newPath] = roomState[roomId].files[path] || '';
+          roomState[roomId].files[newPath] = roomState[roomId].files[filePath] || '';
           syncFilesToDisk(roomId);
 
           const newFile = {
@@ -773,39 +773,39 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('file-delete', async ({ roomId, path, type }: { roomId: string; path: string, type: 'file' | 'folder' }) => {
-    if (!roomState[roomId] || path.includes('../')) return;
+  socket.on('file-delete', async ({ roomId, path: filePath, type }: { roomId: string; path: string, type: 'file' | 'folder' }) => {
+    if (!roomState[roomId] || filePath.includes('../')) return;
 
     const hasPermission = await checkPermissions(socket, roomId, ['Admin', 'Editor']);
     if (!hasPermission) return;
 
     if (type === 'file') {
-      delete roomState[roomId].files[path];
+      delete roomState[roomId].files[filePath];
       
       // Delete from disk
       const roomWorkspace = path.join(WORKSPACE_ROOT, roomId);
-      const fullPath = path.join(roomWorkspace, path);
+      const fullPath = path.join(roomWorkspace, filePath);
       if (fs.existsSync(fullPath)) {
         try {
           fs.rmSync(fullPath, { recursive: true, force: true });
         } catch (err) {
-          console.error(`Error deleting file ${path} from disk:`, err);
+          console.error(`Error deleting file ${filePath} from disk:`, err);
         }
       }
     } else {
       // Delete all nested files from memory
       Object.keys(roomState[roomId].files).forEach(fPath => {
-        if (fPath.startsWith(path + '/')) delete roomState[roomId].files[fPath];
+        if (fPath.startsWith(filePath + '/')) delete roomState[roomId].files[fPath];
       });
 
       // Delete directory from disk
       const roomWorkspace = path.join(WORKSPACE_ROOT, roomId);
-      const fullPath = path.join(roomWorkspace, path);
+      const fullPath = path.join(roomWorkspace, filePath);
       if (fs.existsSync(fullPath)) {
         try {
           fs.rmSync(fullPath, { recursive: true, force: true });
         } catch (err) {
-          console.error(`Error deleting folder ${path} from disk:`, err);
+          console.error(`Error deleting folder ${filePath} from disk:`, err);
         }
       }
     }
@@ -814,24 +814,24 @@ io.on('connection', (socket) => {
 
     try {
       if (type === 'file') {
-        await Room.updateOne({ _id: roomId }, { $pull: { files: { path } } });
+        await Room.updateOne({ _id: roomId }, { $pull: { files: { path: filePath } } });
       } else {
         // Delete folder and all its contents
         await Room.updateOne({ _id: roomId }, { 
-          $pull: { files: { $or: [{ path: path }, { path: new RegExp('^' + escapeRegex(path) + '/') }] } } 
+          $pull: { files: { $or: [{ path: filePath }, { path: new RegExp('^' + escapeRegex(filePath) + '/') }] } } 
         });
       }
       await Activity.create({
         user: socket.data.userId,
         type: 'WORKSPACE_EDITED',
-        description: `Deleted ${type} ${path.split('/').pop()} from workspace`,
+        description: `Deleted ${type} ${filePath.split('/').pop()} from workspace`,
         link: `/workspace/${roomId}`,
         metadata: { roomId }
       });
     } catch (err) {
       console.error('Error deleting file in DB:', err);
     }
-    io.to(roomId).emit('file-deleted', { path, type });
+    io.to(roomId).emit('file-deleted', { path: filePath, type });
   });
 
   socket.on('send-message', async ({ roomId, message, username }: { roomId: string; message: string; username: string }) => {
