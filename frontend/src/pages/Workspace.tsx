@@ -389,11 +389,20 @@ const onPresenceUpdate = (payload: any) => {
         const seededMap = ydoc.getMap('seededFiles');
         if (!seededMap.has(activeFilePath)) {
           const dbFile = dbFiles.find(f => f.path === activeFilePath);
+          
+          if (!dbFile) {
+            console.log(`[Yjs] Waiting for ${activeFilePath} to be available in dbFiles before seeding...`);
+            return;
+          }
+
           ydoc.transact(() => {
-            seededMap.set(activeFilePath, true);
-            if (dbFile?.content && yText.length === 0) {
-              console.log(`[Yjs] Seeding ${activeFilePath} from database content`);
-              yText.insert(0, dbFile.content);
+            // Check again inside transaction to be safe
+            if (!seededMap.has(activeFilePath)) {
+              console.log(`[Yjs] Seeding ${activeFilePath} from database content (Length: ${dbFile.content?.length || 0})`);
+              if (dbFile.content && yText.length === 0) {
+                yText.insert(0, dbFile.content);
+              }
+              seededMap.set(activeFilePath, true);
             }
           });
         }

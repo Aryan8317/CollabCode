@@ -169,9 +169,18 @@ const wss = new WebSocketServer({ noServer: true });
 
 httpServer.on('upgrade', async (request, socket, head) => {
   const url = request.url || '';
-  console.log(`Upgrade request for: ${url}`);
+  
+  // Robust path detection
+  let pathname = '';
+  try {
+    pathname = new URL(url, `http://${request.headers.host || 'localhost'}`).pathname;
+  } catch (e) {
+    pathname = url.split('?')[0];
+  }
 
-  if (url.startsWith('/yjs/')) {
+  console.log(`Upgrade request for pathname: ${pathname} (Full URL: ${url})`);
+
+  if (pathname.startsWith('/yjs/')) {
     const cookieHeader = request.headers.cookie || '';
     let token = cookieHeader.split('token=')[1]?.split(';')[0];
     
@@ -181,30 +190,32 @@ httpServer.on('upgrade', async (request, socket, head) => {
         const fullUrl = new URL(url, `http://${request.headers.host || 'localhost'}`);
         token = fullUrl.searchParams.get('token') || undefined;
       } catch (e) {
-        // Fallback for malformed URLs
-        const match = url.match(/token=([^&]+)/);
-        if (match) token = match[1];
+        // Final fallback for malformed URLs
+        const tokenMatch = url.match(/token=([^&/]+)/);
+        if (tokenMatch) token = tokenMatch[1];
       }
     }
     
     if (!token) {
-      console.warn(`[Yjs] Upgrade rejected: No token found for ${url}`);
+      console.warn(`[Yjs] Upgrade rejected: No token found in ${url}`);
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
       socket.destroy();
       return;
     }
 
     try {
-      jwt.verify(token, process.env.JWT_SECRET as string);
+      const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as any;
+      console.log(`[Yjs] Token verified for user ${decoded.id} at ${pathname}`);
       wss.handleUpgrade(request, socket, head, (ws) => {
         wss.emit('connection', ws, request);
       });
-    } catch (err) {
-      console.error(`[Yjs] Upgrade rejected: Token verification failed for ${url}`);
+    } catch (err: any) {
+      console.error(`[Yjs] Upgrade rejected: JWT error: ${err.message} for ${url}`);
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
       socket.destroy();
     }
   }
+  // No else - let other upgrade listeners (like Socket.IO) handle it
 });
 
 wss.on('connection', (conn, req) => {
@@ -212,19 +223,19 @@ wss.on('connection', (conn, req) => {
   // Extract room name (everything after /yjs/)
   const roomName = url.replace(/^\/yjs\//, '').split('?')[0] || 'default-room';
   
-  console.log(`Yjs connection established for room: ${roomName}`);
+  console.log(`[Yjs] Connection established for room: ${roomName}`);
   
   // Track connections for debugging
   const activeRooms = (wss as any)._activeRooms || new Map();
   activeRooms.set(roomName, (activeRooms.get(roomName) || 0) + 1);
   (wss as any)._activeRooms = activeRooms;
-  console.log(`Active Yjs connections for ${roomName}: ${activeRooms.get(roomName)}`);
+  console.log(`[Yjs] Active connections for ${roomName}: ${activeRooms.get(roomName)}`);
 
   setupWSConnection(conn, req, { docName: roomName });
 
   conn.on('close', () => {
     activeRooms.set(roomName, Math.max(0, (activeRooms.get(roomName) || 0) - 1));
-    console.log(`Yjs connection closed for room: ${roomName}. Remaining: ${activeRooms.get(roomName)}`);
+    console.log(`[Yjs] Connection closed for room: ${roomName}. Remaining: ${activeRooms.get(roomName)}`);
   });
 });
 
@@ -350,22 +361,26 @@ const escapeRegex = (string: string) => {
 const getLanguageTemplate = (language?: string) => {
   switch (language) {
     case 'cpp':
-      return '#include <iostream>\n\nint main() {\n    std::cout << "Hello World!" << std::endl;\n    return 0;\n}';
+      return '#include <iostream>\n\nint main() {\n    std::cout << "Hello CollabCode" << std::endl;\n    return 0;\n}';
     case 'java':
-      return 'public class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello World!");\n    }\n}';
+      return 'public class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello CollabCode");\n    }\n}';
     case 'python':
-      return 'print("Hello World!")';
+      return 'print("Hello CollabCode")';
     case 'javascript':
     case 'typescript':
-      return 'console.log("Hello World!");';
+      return 'console.log("Hello CollabCode");';
     case 'c':
-      return '#include <stdio.h>\n\nint main() {\n    printf("Hello World!\\n");\n    return 0;\n}';
+      return '#include <stdio.h>\n\nint main() {\n    printf("Hello CollabCode\\n");\n    return 0;\n}';
     case 'go':
-      return 'package main\n\nimport "fmt"\n\nfunc main() {\n    fmt.Println("Hello World!")\n}';
+      return 'package main\n\nimport "fmt"\n\nfunc main() {\n    fmt.Println("Hello CollabCode")\n}';
     case 'rust':
-      return 'fn main() {\n    println!("Hello World!");\n}';
+      return 'fn main() {\n    println!("Hello CollabCode");\n}';
+    case 'csharp':
+      return 'using System;\n\nclass Program {\n    static void Main() {\n        Console.WriteLine("Hello CollabCode");\n    }\n}';
+    case 'php':
+      return '<?php\necho "Hello CollabCode";';
     default:
-      return '// New file...';
+      return '// Start collaborating...';
   }
 };
 
