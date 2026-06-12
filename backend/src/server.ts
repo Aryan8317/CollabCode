@@ -413,43 +413,56 @@ io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
 
   socket.on('join-room', async (roomId: string) => {
-    console.log(`User ${socket.data.userId} joining room: ${roomId}`);
-    socket.join(roomId);
-    if (socket.data.userId) {
-      socket.join(`user_${socket.data.userId}`);
-    }
-    
-    // Kill existing terminal if user joins a different room
-    if (socketTerminals[socket.id] && socketTerminals[socket.id].roomId !== roomId) {
-      socketTerminals[socket.id].terminal.kill();
-      delete socketTerminals[socket.id];
-      socket.data.canEditTerminal = false;
-    }
-
-    // Skip roomState logic for private user rooms (e.g. notifications)
+    // Skip permission logic for private user rooms (e.g. notifications)
     if (roomId.startsWith('user_') || roomId === 'notifications') {
+      socket.join(roomId);
       return;
     }
 
     try {
+      if (mongoose.Types.ObjectId.isValid(roomId)) {
+        const room = await Room.findById(roomId);
+        if (!room) return;
+
+        // Check if user has access to join this room
+        const isOwner = room.owner.toString() === socket.data.userId;
+        const isCollaborator = room.collaborators.some(c => c.user.toString() === socket.data.userId);
+        
+        if (room.visibility === 'Private' && !isOwner && !isCollaborator) {
+          console.warn(`User ${socket.data.userId} attempted to join private room ${roomId} without permission.`);
+          return;
+        }
+      } else {
+        return; // Invalid room ID format
+      }
+
+      console.log(`User ${socket.data.userId} joining room: ${roomId}`);
+      socket.join(roomId);
+      if (socket.data.userId) {
+        socket.join(`user_${socket.data.userId}`);
+      }
+      
+      // Kill existing terminal if user joins a different room
+      if (socketTerminals[socket.id] && socketTerminals[socket.id].roomId !== roomId) {
+        socketTerminals[socket.id].terminal.kill();
+        delete socketTerminals[socket.id];
+        socket.data.canEditTerminal = false;
+      }
+
       if (!roomState[roomId]) {
         // Prevent unbounded memory growth
         if (Object.keys(roomState).length >= MAX_IN_MEMORY_ROOMS) {
           console.warn('Max in-memory rooms reached. Skipping state initialization for:', roomId);
-          // Still allow joining for basic communication, but no file state management
         } else {
           roomState[roomId] = { files: {}, activeUsers: {} };
           
-          // Load initial state from DB only if it's a valid Room ID
-          if (mongoose.Types.ObjectId.isValid(roomId)) {
-            const room = await Room.findById(roomId);
-            if (room && room.files) {
-              room.files.forEach(f => {
-                roomState[roomId].files[f.path] = f.content;
-              });
-              console.log(`Loaded ${room.files.length} files from DB for room ${roomId}`);
-              await syncFilesToDisk(roomId);
-            }
+          const room = await Room.findById(roomId);
+          if (room && room.files) {
+            room.files.forEach(f => {
+              roomState[roomId].files[f.path] = f.content;
+            });
+            console.log(`Loaded ${room.files.length} files from DB for room ${roomId}`);
+            await syncFilesToDisk(roomId);
           }
         }
       }
@@ -465,11 +478,11 @@ io.on('connection', (socket) => {
 
         socket.emit('room-state', { activeUsers: Object.values(roomState[roomId].activeUsers) });
         io.to(roomId).emit('presence-update', { activeUsers: Object.values(roomState[roomId].activeUsers) });
-        }
-        } catch (err) {
-        console.error('Error joining room:', err);
-        }
-        });
+      }
+    } catch (err) {
+      console.error('Error joining room:', err);
+    }
+  });
 
         socket.on('leave-room', (roomId: string) => {
         socket.leave(roomId);
