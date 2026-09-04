@@ -315,7 +315,7 @@ const flushRoomFilesToDB = async (roomId: string) => {
     const room = await Room.findById(roomId);
     if (!room || !room.files) return;
 
-    const bulkOps = [];
+    const bulkOps: any[] = [];
 
     for (const [filePath, content] of Object.entries(roomState[roomId].files)) {
       const file = room.files.find(f => f.path === filePath);
@@ -356,7 +356,7 @@ const flushRoomFilesToDB = async (roomId: string) => {
     }
 
     if (bulkOps.length > 0) {
-      await Room.bulkWrite(bulkOps);
+      await Room.bulkWrite(bulkOps as any);
     }
   } catch (err) {
     console.error(`Error flushing files to DB for room ${roomId}:`, err);
