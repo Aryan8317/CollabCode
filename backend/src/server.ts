@@ -299,45 +299,64 @@ app.get('/', (req, res) => {
 
 // Store room states, save timeouts, and terminals
 const MAX_IN_MEMORY_ROOMS = 100;
-const roomState: Record<string, { files: Record<string, string>, activeUsers: Record<string, any> }> = {};
+const roomState: Record<string, { files: Record<string, string>, activeUsers: Record<string, any>, lastAccessed: number }> = {};
 const saveTimeouts: Record<string, NodeJS.Timeout> = {};
 const socketTerminals: Record<string, { terminal: pty.IPty, roomId: string }> = {};
+
+const isSafePath = (roomId: string, requestedPath: string) => {
+  const roomWorkspace = path.resolve(WORKSPACE_ROOT, roomId);
+  const fullPath = path.resolve(roomWorkspace, requestedPath);
+  return fullPath === roomWorkspace || fullPath.startsWith(roomWorkspace + path.sep);
+};
 
 const flushRoomFilesToDB = async (roomId: string) => {
   if (!roomState[roomId]) return;
   try {
     const room = await Room.findById(roomId);
-    if (room && room.files) {
-      for (const [path, content] of Object.entries(roomState[roomId].files)) {
-        const fileIndex = room.files.findIndex(f => f.path === path);
-        if (fileIndex > -1) {
-          room.files[fileIndex].content = content;
-        } else {
-          const name = path.split('/').pop() || path;
-          const ext = name.split('.').pop()?.toLowerCase();
-          let lang = 'plaintext';
-          if (ext === 'ts' || ext === 'tsx') lang = 'typescript';
-          else if (ext === 'js' || ext === 'jsx') lang = 'javascript';
-          else if (ext === 'py') lang = 'python';
-          else if (ext === 'java') lang = 'java';
-          else if (ext === 'cpp' || ext === 'c') lang = 'cpp';
-          else if (ext === 'go') lang = 'go';
-          else if (ext === 'rs') lang = 'rust';
-          else if (ext === 'php') lang = 'php';
-          else if (ext === 'cs') lang = 'csharp';
-          else if (ext === 'html') lang = 'html';
-          else if (ext === 'css') lang = 'css';
-          else if (ext === 'json') lang = 'json';
+    if (!room || !room.files) return;
 
-          room.files.push({ 
-            name, 
-            path, 
-            content, 
-            language: lang 
-          });
+    const bulkOps = [];
+
+    for (const [filePath, content] of Object.entries(roomState[roomId].files)) {
+      const file = room.files.find(f => f.path === filePath);
+      
+      if (file) {
+        if (file.content !== content) {
+           bulkOps.push({
+             updateOne: {
+               filter: { _id: roomId, "files.path": filePath },
+               update: { $set: { "files.$.content": content } }
+             }
+           });
         }
+      } else {
+        const name = filePath.split('/').pop() || filePath;
+        const ext = name.split('.').pop()?.toLowerCase();
+        let lang = 'plaintext';
+        if (ext === 'ts' || ext === 'tsx') lang = 'typescript';
+        else if (ext === 'js' || ext === 'jsx') lang = 'javascript';
+        else if (ext === 'py') lang = 'python';
+        else if (ext === 'java') lang = 'java';
+        else if (ext === 'cpp' || ext === 'c') lang = 'cpp';
+        else if (ext === 'go') lang = 'go';
+        else if (ext === 'rs') lang = 'rust';
+        else if (ext === 'php') lang = 'php';
+        else if (ext === 'cs') lang = 'csharp';
+        else if (ext === 'html') lang = 'html';
+        else if (ext === 'css') lang = 'css';
+        else if (ext === 'json') lang = 'json';
+
+        bulkOps.push({
+          updateOne: {
+            filter: { _id: roomId },
+            update: { $push: { files: { name, path: filePath, content, language: lang, type: 'file' } } }
+          }
+        });
       }
-      await room.save();
+    }
+
+    if (bulkOps.length > 0) {
+      await Room.bulkWrite(bulkOps);
     }
   } catch (err) {
     console.error(`Error flushing files to DB for room ${roomId}:`, err);
@@ -450,24 +469,38 @@ io.on('connection', (socket) => {
       }
 
       if (!roomState[roomId]) {
-        // Prevent unbounded memory growth
         if (Object.keys(roomState).length >= MAX_IN_MEMORY_ROOMS) {
-          console.warn('Max in-memory rooms reached. Skipping state initialization for:', roomId);
-        } else {
-          roomState[roomId] = { files: {}, activeUsers: {} };
-          
-          const room = await Room.findById(roomId);
-          if (room && room.files) {
-            room.files.forEach(f => {
-              roomState[roomId].files[f.path] = f.content;
-            });
-            console.log(`Loaded ${room.files.length} files from DB for room ${roomId}`);
-            await syncFilesToDisk(roomId);
+          let oldestRoomId: string | null = null;
+          let oldestTime = Date.now();
+          for (const [rId, state] of Object.entries(roomState)) {
+             if (Object.keys(state.activeUsers).length === 0 && state.lastAccessed < oldestTime) {
+                oldestRoomId = rId;
+                oldestTime = state.lastAccessed;
+             }
           }
+          if (oldestRoomId) {
+             deleteRoomState(oldestRoomId);
+          } else {
+             console.warn('Max in-memory rooms reached and no inactive rooms to evict. Skipping state initialization for:', roomId);
+             return;
+          }
+        }
+        
+        roomState[roomId] = { files: {}, activeUsers: {}, lastAccessed: Date.now() };
+        
+        const room = await Room.findById(roomId);
+        if (room && room.files) {
+          room.files.forEach(f => {
+            roomState[roomId].files[f.path] = f.content;
+          });
+          console.log(`Loaded ${room.files.length} files from DB for room ${roomId}`);
+          await syncFilesToDisk(roomId);
         }
       }
 
       if (roomState[roomId]) {
+        roomState[roomId].lastAccessed = Date.now();
+
         roomState[roomId].activeUsers[socket.id] = {
           id: socket.data.userId,
           name: socket.data.userName,
@@ -610,7 +643,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('code-change', async ({ roomId, fileName, code }: { roomId: string; fileName: string; code: string }, callback?: Function) => {
-    if (!roomState[roomId] || !fileName || fileName.includes('../')) return;
+    if (!roomState[roomId] || !fileName || !isSafePath(roomId, fileName)) return;
     if (code && code.length > 500 * 1024) return; // 500KB limit
 
     const hasPermission = await checkPermissions(socket, roomId, ['Admin', 'Editor']);
@@ -620,6 +653,7 @@ io.on('connection', (socket) => {
     }
     
     roomState[roomId].files[fileName] = code;
+    roomState[roomId].lastAccessed = Date.now();
     syncFilesToDisk(roomId);
 
     // Debounced save to MongoDB
@@ -630,8 +664,15 @@ io.on('connection', (socket) => {
   });
 
   socket.on('file-create', async ({ roomId, name, path: filePath, type, language }: { roomId: string; name: string, path: string, type: 'file' | 'folder', language?: string }) => {
-    if (!roomState[roomId] || !filePath || filePath.includes('../')) return;
+    if (!roomState[roomId] || !filePath || !isSafePath(roomId, filePath)) return;
     if (name.length > 255 || filePath.length > 1024) return;
+    
+    // Check file count limit
+    const currentFiles = Object.keys(roomState[roomId].files).length;
+    if (currentFiles >= 50) {
+      socket.emit('error', { message: 'Maximum file limit (50) reached for this workspace.' });
+      return;
+    }
     
     const hasPermission = await checkPermissions(socket, roomId, ['Admin', 'Editor']);
     if (!hasPermission) return;
@@ -653,7 +694,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('file-rename', async ({ roomId, oldPath, newPath, newName }: { roomId: string; oldPath: string, newPath: string, newName: string }) => {
-    if (!roomState[roomId]) return;
+    if (!roomState[roomId] || !isSafePath(roomId, oldPath) || !isSafePath(roomId, newPath)) return;
     
     const hasPermission = await checkPermissions(socket, roomId, ['Admin', 'Editor']);
     if (!hasPermission) return;
@@ -698,7 +739,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('file-move', async ({ roomId, oldPath, newPath }: { roomId: string; oldPath: string, newPath: string }) => {
-    if (!roomState[roomId]) return;
+    if (!roomState[roomId] || !isSafePath(roomId, oldPath) || !isSafePath(roomId, newPath)) return;
 
     const hasPermission = await checkPermissions(socket, roomId, ['Admin', 'Editor']);
     if (!hasPermission) return;
@@ -743,7 +784,14 @@ io.on('connection', (socket) => {
   });
 
   socket.on('file-duplicate', async ({ roomId, path: filePath }: { roomId: string; path: string }) => {
-    if (!roomState[roomId]) return;
+    if (!roomState[roomId] || !isSafePath(roomId, filePath)) return;
+
+    // Check file count limit
+    const currentFiles = Object.keys(roomState[roomId].files).length;
+    if (currentFiles >= 50) {
+      socket.emit('error', { message: 'Maximum file limit (50) reached for this workspace.' });
+      return;
+    }
 
     const hasPermission = await checkPermissions(socket, roomId, ['Admin', 'Editor']);
     if (!hasPermission) return;
@@ -787,7 +835,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('file-delete', async ({ roomId, path: filePath, type }: { roomId: string; path: string, type: 'file' | 'folder' }) => {
-    if (!roomState[roomId] || filePath.includes('../')) return;
+    if (!roomState[roomId] || !isSafePath(roomId, filePath)) return;
 
     const hasPermission = await checkPermissions(socket, roomId, ['Admin', 'Editor']);
     if (!hasPermission) return;

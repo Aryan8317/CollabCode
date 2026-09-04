@@ -16,6 +16,7 @@ import { getFileIcon } from '../utils/fileUtils';
 import { defineMonacoThemes } from '../utils/monacoThemes';
 
 interface Message {
+  id: string;
   username: string;
   message: string;
   timestamp: string;
@@ -184,12 +185,19 @@ const Workspace: React.FC = () => {
       const { data } = await API.get(`/rooms/${roomId}/messages?page=${page}&limit=50`);
       const msgArray = data.messages || [];
       const formattedMessages = msgArray.map((msg: any) => ({
-        username: msg.sender?.name || 'Unknown',
-        message: msg.content,
+        id: msg._id || Math.random().toString(),
+        username: msg.sender?.name || msg.username || 'Unknown',
+        message: msg.content || msg.message,
         timestamp: new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       })).reverse();
       
-      setMessages(prev => page === 1 ? formattedMessages : [...formattedMessages, ...prev]);
+      setMessages(prev => {
+        if (page === 1) return formattedMessages;
+        // Merge without duplicates
+        const existingIds = new Set(prev.map(m => m.id));
+        const newUnique = formattedMessages.filter((m: any) => !existingIds.has(m.id));
+        return [...newUnique, ...prev];
+      });
       setHasMoreChat(data.page < data.pages);
     } catch (err) {
       console.error('Error fetching messages:', err);
@@ -252,6 +260,21 @@ const onPresenceUpdate = (payload: any) => {
 
     const onFileRenamed = ({ oldPath, newPath, newName }: any) => {
       console.log(`[FileSync] Renamed: ${oldPath} -> ${newPath}`);
+      
+      if (ydocRef.current) {
+         ydocRef.current.transact(() => {
+           const oldText = ydocRef.current!.getText(oldPath);
+           const newText = ydocRef.current!.getText(newPath);
+           if (oldText.length > 0 && newText.length === 0) {
+             newText.insert(0, oldText.toString());
+           }
+           const seededMap = ydocRef.current!.getMap('seededFiles');
+           if (seededMap.has(oldPath)) {
+             seededMap.set(newPath, true);
+           }
+         });
+      }
+
       setDbFiles(prev => prev.map(f => {
         if (f.path === oldPath) return { ...f, path: newPath, name: newName };
         if (f.path.startsWith(oldPath + '/')) {
@@ -300,7 +323,10 @@ const onPresenceUpdate = (payload: any) => {
     };
 
     const onNewMessage = (msg: Message) => {
-      setMessages((prev) => [...prev, msg]);
+      setMessages((prev) => {
+        if (prev.some(m => m.id === msg.id)) return prev;
+        return [...prev, msg];
+      });
       setTypingUsers(prev => {
         const next = new Set(prev);
         next.delete(msg.username);
@@ -320,11 +346,15 @@ const onPresenceUpdate = (payload: any) => {
 
     const onUserSwitchedFile = ({ path, username: swUsername }: { path: string, username: string }) => {
       if (swUsername !== username) {
-        setMessages((prev) => [...prev, { 
-          username: 'System', 
-          message: `${swUsername} is now viewing ${path.split('/').pop()}`, 
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
-        }]);
+        setMessages((prev) => {
+          const newMsg = { 
+            id: Math.random().toString(),
+            username: 'System', 
+            message: `${swUsername} is now viewing ${path.split('/').pop()}`, 
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+          };
+          return [...prev, newMsg];
+        });
       }
     };
 
@@ -366,9 +396,6 @@ const onPresenceUpdate = (payload: any) => {
   // Re-bind Monaco when active file changes or editor mounts
   useEffect(() => {
     let binding: MonacoBinding | null = null;
-    let awareness: any = null;
-    let updateCursors: any = null;
-    const cursorDecorations = { ids: [] as string[] };
 
     if (activeFilePath) {
       socket?.emit('switch-file', { roomId, path: activeFilePath, username });
@@ -391,12 +418,10 @@ const onPresenceUpdate = (payload: any) => {
           const dbFile = dbFiles.find(f => f.path === activeFilePath);
           
           if (!dbFile) {
-            console.log(`[Yjs] Waiting for ${activeFilePath} to be available in dbFiles before seeding...`);
             return;
           }
 
           ydoc.transact(() => {
-            // Check again inside transaction to be safe
             if (!seededMap.has(activeFilePath)) {
               console.log(`[Yjs] Seeding ${activeFilePath} from database content (Length: ${dbFile.content?.length || 0})`);
               if (dbFile.content && yText.length === 0) {
@@ -421,60 +446,9 @@ const onPresenceUpdate = (payload: any) => {
         yProviderRef.current.awareness
       );
       bindingRef.current = binding;
-
-      // Render remote cursors from Yjs awareness
-      awareness = yProviderRef.current.awareness;
-
-      updateCursors = () => {
-        const states = awareness.getStates();
-        const newDecorations: any[] = [];
-        states.forEach((state: any, clientId: number) => {
-          if (clientId === awareness.clientID) return;
-          if (!state.user) return;
-          
-          if (state.cursor) {
-            try {
-              const anchorPos = Y.createAbsolutePositionFromRelativePosition(
-                Y.createRelativePositionFromJSON(state.cursor.anchor),
-                ydoc
-              );
-              if (!anchorPos) return;
-              const model = editorRef.current?.getModel();
-              if (!model) return;
-              const pos = model.getPositionAt(anchorPos.index);
-
-              newDecorations.push({
-                range: { startLineNumber: pos.lineNumber, startColumn: pos.column, endLineNumber: pos.lineNumber, endColumn: pos.column + 1 },
-                options: {
-                  className: `remote-cursor-${clientId}`,
-                  hoverMessage: { value: state.user.name },
-                  before: {
-                    content: state.user.name,
-                    inlineClassName: 'yRemoteSelectionHead-label'
-                  }
-                }
-              });
-            } catch (err) {
-              // Stale awareness state — skip
-            }
-          }
-        });
-        
-        if (editorRef.current) {
-          cursorDecorations.ids = editorRef.current.deltaDecorations(cursorDecorations.ids, newDecorations);
-        }
-      };
-
-      awareness.on('change', updateCursors);
     }
 
     return () => {
-      if (awareness && updateCursors) {
-        awareness.off('change', updateCursors);
-      }
-      if (editorRef.current && cursorDecorations.ids.length > 0) {
-        editorRef.current.deltaDecorations(cursorDecorations.ids, []);
-      }
       if (binding) {
         binding.destroy();
         if (bindingRef.current === binding) {
@@ -528,7 +502,11 @@ const onPresenceUpdate = (payload: any) => {
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (messageInput.trim() && canEdit) {
-      socket?.emit('send-message', { roomId, message: messageInput, username });
+      const tempId = Math.random().toString();
+      const newMsg = { id: tempId, roomId, message: messageInput, username };
+      socket?.emit('send-message', newMsg);
+      // Optimistically add
+      setMessages(prev => [...prev, { ...newMsg, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
       socket?.emit('typing', { roomId, username, isTyping: false });
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       setMessageInput('');

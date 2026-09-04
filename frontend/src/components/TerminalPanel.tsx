@@ -85,11 +85,13 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ socket, roomId, visible, 
   // Handle visibility changes separately to refit and focus
   useEffect(() => {
     if (visible && xtermRef.current && fitAddonRef.current) {
-      // Need a slight delay to allow the div to actually become block-level and have dimensions
-      setTimeout(() => {
-        fitAddonRef.current?.fit();
-        xtermRef.current?.focus();
-      }, 50);
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          fitAddonRef.current?.fit();
+          xtermRef.current?.focus();
+          xtermRef.current?.refresh(0, xtermRef.current!.rows - 1);
+        }, 50);
+      });
     }
   }, [visible]);
 
@@ -103,8 +105,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ socket, roomId, visible, 
     <div 
       ref={terminalRef} 
       onClick={() => xtermRef.current?.focus()}
-      className="w-full h-full p-2 bg-[#0b0e14] border-t border-outline-variant cursor-text"
-      style={{ display: visible ? 'block' : 'none' }}
+      className={`w-full h-full p-2 bg-surface-container-lowest border-t border-outline-variant cursor-text ${visible ? 'block' : 'hidden'}`}
     />
   );
 };

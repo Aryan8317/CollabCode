@@ -73,7 +73,13 @@ const roomSchema = new mongoose.Schema(
       type: String,
       unique: true,
     },
-    files: [fileSchema],
+    files: {
+      type: [fileSchema],
+      validate: [
+        function(this: any, val: any[]) { return val.length <= 50; },
+        '{PATH} exceeds the limit of 50 files'
+      ]
+    },
   },
   {
     timestamps: true,

@@ -131,7 +131,7 @@ const Community: React.FC = () => {
           </div>
           <nav className="flex-1 space-y-1">
             <div className="flex items-center gap-3 px-4 py-2 bg-surface-container-highest text-primary border-l-2 border-primary transition-all translate-x-1 duration-200 cursor-pointer">
-              <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>explore</span>
+              <span className="material-symbols-outlined icon-fill">explore</span>
               <span className="font-code-sm text-code-sm">Explorer</span>
             </div>
             <div onClick={() => navigate('/rooms-explorer')} className="flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-all cursor-pointer">
@@ -181,7 +181,7 @@ const Community: React.FC = () => {
                   <span className="font-code-md text-code-md font-bold text-[14px]">{stats?.latency || '14ms'}</span>
                 </div>
                 <div className="w-full bg-surface-container-highest h-1 rounded-full overflow-hidden">
-                  <div className="bg-secondary h-full" style={{ width: '85%' }}></div>
+                  <div className="bg-secondary h-full w-[85%]"></div>
                 </div>
                 <div className="flex items-center gap-2 text-on-surface-variant">
                   <span className="material-symbols-outlined text-[14px]">public</span>
@@ -249,7 +249,7 @@ const Community: React.FC = () => {
                   <div key={post._id} className="glass-panel rounded-lg p-4 transition-colors border border-outline-variant/30">
                     <div className="flex gap-4">
                       <div className="flex flex-col items-center gap-1 bg-surface-container rounded p-2 h-fit">
-                        <button onClick={(e) => { e.stopPropagation(); handleLikePost(post._id); }} className="material-symbols-outlined text-on-surface-variant hover:text-primary" style={{ fontVariationSettings: post.likes.includes(user?.id) ? "'FILL' 1" : "" }}>
+                        <button onClick={(e) => { e.stopPropagation(); handleLikePost(post._id); }} className={`material-symbols-outlined text-on-surface-variant hover:text-primary ${post.likes.includes(user?.id) ? 'icon-fill' : ''}`}>
                           expand_less
                         </button>
                         <span className="font-code-md text-code-md text-primary font-bold">{post.likes.length}</span>
@@ -325,7 +325,7 @@ const Community: React.FC = () => {
                           <img src={user.avatar || `https://ui-avatars.com/api/?name=${user.name}&size=40`} className="w-full h-full object-cover" alt="" />
                           {idx === 0 && (
                             <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-secondary rounded-full border-2 border-surface-container flex items-center justify-center">
-                              <span className="material-symbols-outlined text-[10px] text-on-secondary" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+                              <span className="material-symbols-outlined text-[10px] text-on-secondary icon-fill">star</span>
                             </div>
                           )}
                         </div>

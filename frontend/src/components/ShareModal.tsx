@@ -64,6 +64,15 @@ const ShareModal: React.FC<ShareModalProps> = ({ roomId, roomName, inviteCode, c
     }
   };
 
+  const handleGenerateInviteCode = async () => {
+    try {
+      await API.post(`/rooms/${roomId}/invite-code`);
+      onUpdate(); // refresh the room data
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.response?.data?.message || 'Failed to generate code' });
+    }
+  };
+
   const handleRemoveCollaborator = async (userId: string) => {
     try {
       await API.delete(`/rooms/${roomId}/collaborators/${userId}`);
@@ -161,6 +170,13 @@ const ShareModal: React.FC<ShareModalProps> = ({ roomId, roomName, inviteCode, c
                 <label className="text-[11px] font-mono font-bold text-on-surface-variant uppercase tracking-widest">Invite Code</label>
                 <div className="flex items-center gap-2 bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-2 pl-4">
                   <span className="text-[13px] text-on-surface-variant truncate flex-1 font-mono">{inviteCode}</span>
+                  <button 
+                    onClick={handleGenerateInviteCode}
+                    className="flex items-center justify-center w-8 h-8 rounded-lg transition-all bg-surface-container-high text-on-surface-variant hover:text-on-surface"
+                    title="Regenerate Invite Code"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">refresh</span>
+                  </button>
                   <button 
                     onClick={() => handleCopy(inviteCode, 'code')}
                     className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all ${copiedCode ? 'bg-secondary/10 text-secondary' : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface'}`}

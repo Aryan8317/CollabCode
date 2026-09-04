@@ -170,6 +170,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
 
   const handleContextMenu = (e: React.MouseEvent, path: string, type: 'file' | 'folder') => {
     e.preventDefault();
+    e.stopPropagation();
     setContextMenu({ x: e.clientX, y: e.clientY, path, type });
   };
 

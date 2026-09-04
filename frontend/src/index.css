@@ -45,6 +45,28 @@
   --spacing-sidebar-width: 260px;
   --spacing-panel-width: 320px;
   --spacing-tab-height: 40px;
+
+  --animate-fade-in: fade-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-scale-in: scale-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-pulse-subtle: pulse-subtle 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-blink: blink 1s step-end infinite;
+
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes scale-in {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  @keyframes pulse-subtle {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 0.7; }
+  }
+  @keyframes blink {
+    from, to { border-color: transparent; }
+    50% { border-color: currentColor; }
+  }
 }
 
 @layer base {
@@ -52,76 +74,65 @@
     @apply bg-background text-on-surface font-geist;
     overflow-x: hidden;
   }
+
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #0b0e14;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #32353c;
+    border-radius: 2px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #424754;
+  }
 }
 
+@utility glass-surface {
+  background-color: rgba(21, 25, 33, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+@utility glass-panel {
+  background-color: rgba(21, 25, 33, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+@utility presence-glow-blue {
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.15);
+}
+
+@utility presence-glow-emerald {
+  box-shadow: 0 0 12px 2px rgba(16, 185, 129, 0.15);
+}
+
+@utility icon-fill {
+  font-variation-settings: 'FILL' 1;
+}
+
+@utility editor-cursor {
+  animation: var(--animate-blink);
+}
+
+@utility syntax-keyword { color: #adc6ff; }
+@utility syntax-string { color: #4edea3; }
+@utility syntax-function { color: #ffb95f; }
+@utility syntax-comment { color: #8c909f; font-style: italic; }
+
 @layer components {
-  .glass-surface {
-    background: rgba(21, 25, 33, 0.7);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-  }
-
-  .glass-panel {
-    background: rgba(21, 25, 33, 0.7);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-  }
-
-  .presence-glow-blue {
-    box-shadow: 0 0 15px rgba(59, 130, 246, 0.15);
-  }
-
-  .presence-glow-emerald {
-    box-shadow: 0 0 12px 2px rgba(16, 185, 129, 0.15);
-  }
-
   .material-symbols-outlined {
     font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
     vertical-align: middle;
   }
 }
-
-@keyframes pulse-subtle {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 0.7; }
-}
-
-.animate-pulse-subtle {
-  animation: pulse-subtle 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-/* Custom Scrollbar */
-::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
-}
-
-::-webkit-scrollbar-track {
-  background: #0b0e14;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #32353c;
-  border-radius: 2px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #424754;
-}
-
-.editor-cursor {
-  animation: blink 1s step-end infinite;
-}
-
-@keyframes blink {
-  from, to { border-color: transparent; }
-  50% { border-color: currentColor; }
-}
-
-.syntax-keyword { color: #adc6ff; }
-.syntax-string { color: #4edea3; }
-.syntax-function { color: #ffb95f; }
-.syntax-comment { color: #8c909f; font-style: italic; }
 
 /* Yjs Remote Cursors */
 .yRemoteSelection {

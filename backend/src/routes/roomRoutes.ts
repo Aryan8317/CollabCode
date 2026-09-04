@@ -17,6 +17,7 @@ import {
   getRoomVersions,
   restoreRoomVersion,
   updateRoom,
+  generateInviteCode,
   updateCollaboratorRole
 } from '../controllers/roomController.js';
 import { protect } from '../middleware/authMiddleware.js';
@@ -34,6 +35,7 @@ router.post('/invitations/:id/decline', protect, declineInvitation);
 router.get('/:id', protect, getRoomById);
 router.put('/:id', protect, updateRoom);
 router.get('/:id/messages', protect, getRoomMessages);
+router.post('/:id/invite-code', protect, generateInviteCode);
 router.post('/:id/versions', protect, saveRoomVersion);
 router.get('/:id/versions', protect, getRoomVersions);
 router.post('/:id/versions/:versionId/restore', protect, restoreRoomVersion);

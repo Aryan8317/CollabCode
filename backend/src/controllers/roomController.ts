@@ -123,14 +123,18 @@ export const executeCode = async (req: any, res: Response) => {
   } catch (error: any) {
     console.error('Execution error details:', error.response?.data || error.message);
     
-    // Do NOT forward 401/403 from external APIs to our frontend, as it triggers logout
+    // Do NOT forward HTTP errors that break the frontend. Instead, return a graceful error payload.
     const externalStatus = error.response?.status;
-    const statusCode = (externalStatus === 401 || externalStatus === 403) ? 502 : (externalStatus || 500);
     const errorMsg = error.response?.data?.message || error.response?.data?.error || error.message;
     
-    res.status(statusCode).json({ 
-      message: 'Execution service error', 
-      details: `External Service Error (${externalStatus || 'N/A'}): ${errorMsg}` 
+    res.json({ 
+      stdout: '',
+      stderr: `Execution Service Error (${externalStatus || 'N/A'}): ${errorMsg}\n\nNote: The free execution engine (Paiza) might be rate-limited. Please try again in a few seconds.`,
+      compile: { stderr: '' },
+      run: { stdout: '', stderr: '', code: 1, time: '0', memory: '0' },
+      status: 'Execution Service Error',
+      language: req.body.language || 'unknown',
+      version: ''
     });
   }
 };
@@ -334,6 +338,26 @@ export const updateCollaboratorRole = async (req: any, res: Response) => {
 // @desc    Get room messages
 // @route   GET /api/rooms/:id/messages
 // @access  Private
+export const generateInviteCode = async (req: any, res: Response) => {
+  try {
+    const room = await Room.findById(req.params.id);
+    if (!room) return res.status(404).json({ message: 'Room not found' });
+
+    // Check if user is Admin
+    const collaborator = room.collaborators.find(c => c.user.toString() === req.user.id);
+    if (!collaborator || collaborator.role !== 'Admin') {
+      return res.status(403).json({ message: 'Only Admins can generate an invite code' });
+    }
+
+    room.inviteCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+    await room.save();
+
+    res.json({ message: 'Invite code generated', inviteCode: room.inviteCode });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error generating invite code', error });
+  }
+};
+
 export const getRoomMessages = async (req: any, res: Response) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
@@ -633,6 +657,7 @@ export const acceptInvitation = async (req: any, res: Response) => {
 
     if (req.io) {
       req.io.to(room._id.toString()).emit('collaborators-updated');
+      req.io.to(`user_${req.user.id}`).emit('notification-updated');
     }
 
     res.json({ message: 'Invitation accepted successfully', roomId: room._id });
@@ -691,6 +716,10 @@ export const declineInvitation = async (req: any, res: Response) => {
 
     await session.commitTransaction();
     session.endSession();
+
+    if (req.io) {
+      req.io.to(`user_${req.user.id}`).emit('notification-updated');
+    }
 
     res.json({ message: 'Invitation declined successfully' });
   } catch (error) {
